@@ -1,0 +1,8 @@
+// Note (AGP 9): the Kotlin Android plugin is built into AGP itself and must
+// NOT be applied (see https://kotl.in/gradle/agp-built-in-kotlin). Only the
+// Compose and serialization compiler plugins are declared here.
+plugins {
+    id 'com.android.application' version '9.2.1' apply false
+    id 'org.jetbrains.kotlin.plugin.compose' version '2.3.10' apply false
+    id 'org.jetbrains.kotlin.plugin.serialization' version '2.3.10' apply false
+}
