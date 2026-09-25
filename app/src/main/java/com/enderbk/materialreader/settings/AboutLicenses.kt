@@ -14,4 +14,4 @@ val DependencyLicenses = listOf(
     DependencyLicense("JUnit 4 (tests only)", "4.13.2", "EPL-1.0")
 )
 
-const val REPOSITORY_URL = "https://github.com/enderbk/MaterialReader"
+const val REPOSITORY_URL = "https://github.com/enderbk0/MaterialReader"

@@ -31,6 +31,9 @@ class FakeBackend : ReaderBackend {
     override suspend fun renderPage(document: PdfDocument, index: Int, widthPx: Int): Bitmap =
         throw UnsupportedOperationException("Not needed for these UI states")
 
+    override suspend fun renderNightPage(document: PdfDocument, index: Int, widthPx: Int): Bitmap =
+        throw UnsupportedOperationException("Not needed for these UI states")
+
     override suspend fun search(uriString: String, query: String): List<TextHit> = emptyList()
 
     override suspend fun pageText(uriString: String, page: Int): String = ""

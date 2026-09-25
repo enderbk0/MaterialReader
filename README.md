@@ -19,6 +19,7 @@ architectural guarantee, not a marketing claim.
 **Library**
 
 - Recent + pinned/favorite PDFs, search by filename, sort by recent/name/size
+- Folders: group PDFs, filter by folder, relink missing files from the library
 - Prominent "Open PDF" action using the Android system document picker
   (Storage Access Framework — no broad filesystem access requested)
 - Persistable URI grants, so documents stay in the library across restarts
@@ -39,9 +40,14 @@ architectural guarantee, not a marketing claim.
   light); a hue-restoring filter keeps colored figures recognizable, though
   photos/diagrams are still recolored — toggle in the reader menu or Settings
 - In-document text search (offline, via the bundled PdfBox text layer)
+- Reader menu extras: print, share the PDF, details, and a minimal
+  quick-settings sheet (theme, night mode, keep-awake)
 - Per-page text sheet: selectable text, copy, share, and tappable
   http(s) link annotations (opened in the user's browser on explicit tap)
 - Optional "remember reading position" (on-device only)
+- Print, share the PDF file, and a details sheet from the reader menu
+- Experimental corner (unlock by tapping the version in About 5 times):
+  floating pill navigation and other trials
 - Optional "keep screen awake while reading"
 - Follows device rotation automatically; light/dark/dynamic-color aware
 - Opens PDFs from the picker, from file managers (`VIEW`), and from share
@@ -86,6 +92,60 @@ returns nothing, and the dependency list contains no proprietary SDKs.
 | Interactive forms, JavaScript, video/audio, 3D | ❌ Rendered statically or not at all; engine limitation |
 | In-place text selection *on the rendered bitmap* | ⚠️ By design: selection happens in the page-text sheet (selectable text + copy/share), because `PdfRenderer` exposes no text runs. Scanned pages show an honest "no extractable text" note |
 | Very large search indexes | Search caps at 2,000 pages / 300 hits to bound time and memory |
+
+## Rendering architecture (and why not AndroidX PDF)
+
+Zoom had no visible effect in early builds; the investigation found the bug
+in our own gesture/state layer, not the renderer — so no new engine was
+needed, only correct plumbing:
+
+- **One `PdfSession` per open document.** The platform `PdfRenderer` handle
+  is created once at open and closed on exit — never per zoom update.
+- **Pinch accumulates per gesture** against the scale at gesture start, then
+  passes through a 0.5% throttle. (Previously, sub-threshold frames were
+  dropped *with their motion lost forever*, freezing slow pinches.)
+- **Finger-anchored pinch** (continuous mode): the scroll offset is
+  compensated around the fingers' centroid on every scale change, so content
+  stays put; single-page mode is center-anchored.
+- **No per-frame re-rendering:** Compose requests settled `(index, width)`
+  pairs only (120ms settle debounce, 160px width buckets, 2048px cap, OOM
+  retry at half width). Bitmaps live in a bounded LRU shared by all pages;
+  recomposition carries state, never pixels.
+- **Free 2D pan** while zoomed (list scroll locks); snap-back on zoom out.
+
+We evaluated migrating the viewer to the official AndroidX PDF libraries
+(`androidx.pdf:pdf-viewer` / `pdf-compose` 1.0.0-beta01) and rejected it on
+evidence:
+
+1. Both are **beta**, not stable.
+2. They require **minSdk 28** (we support 24+; platform `PdfRenderer` works).
+3. They transitively pull in **`play-services-mlkit-text-recognition`**
+   (proprietary Google Play Services) via `pdf-ocr-play-services` —
+   incompatible with our FOSS, no-proprietary-SDK requirements.
+4. Rendering runs in an isolated-process document service, which our custom
+   night-mode compositing could not run inside.
+
+PdfBox-Android remains **only** for what the platform engine cannot do:
+offline text extraction (search, page text), link annotations, and
+per-page image-region analysis for night mode.
+
+PDF appearance (Normal / Night) is fully decoupled from the Material theme
+(Light / Dark / System) by a single tested function: night mode always
+renders the night path with a dark background in *any* theme, and flipping
+the theme never alters page rendering — only the surrounding surfaces.
+
+Night classification uses combined signals (coverage, bleed, draw order
+vs. text, curves/shading, filled-area share, OCR presence): text PDFs invert
+to true black; every image page inverts first (so dark text always becomes
+light) and then paints its picture regions back as dimmed originals — photos
+and full-page scans (± OCR, rotated) keep their hues while going dark;
+vector-heavy charts and full-bleed posters dim so artwork and headlines stay
+legible. Table rules and underlines never count as artwork.
+
+Night mode never inverts pictures: image placements are extracted from each
+page's content stream, the page is inverted on the CPU, and the original
+picture regions are composited back. Fully scanned pages fall back to a dim
+that preserves hues. Vector diagrams still invert (documented limitation).
 
 ## Tech stack
 

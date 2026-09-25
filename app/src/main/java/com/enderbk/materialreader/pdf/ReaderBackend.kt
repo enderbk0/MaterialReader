@@ -25,6 +25,7 @@ interface ReaderBackend {
     fun canOpen(uriString: String): Boolean
     suspend fun openSession(uriString: String): PdfDocument
     suspend fun renderPage(document: PdfDocument, index: Int, widthPx: Int): Bitmap
+    suspend fun renderNightPage(document: PdfDocument, index: Int, widthPx: Int): Bitmap
     suspend fun search(uriString: String, query: String): List<TextHit>
     suspend fun pageText(uriString: String, page: Int): String
     suspend fun pageLinks(uriString: String, page: Int): List<PageLink>
@@ -46,6 +47,9 @@ class SystemReaderBackend(private val appContext: Context) : ReaderBackend {
 
     override suspend fun renderPage(document: PdfDocument, index: Int, widthPx: Int): Bitmap =
         document.renderPage(index, widthPx)
+
+    override suspend fun renderNightPage(document: PdfDocument, index: Int, widthPx: Int): Bitmap =
+        document.renderNightPage(index, widthPx)
 
     override suspend fun search(uriString: String, query: String): List<TextHit> =
         searchPdfText(appContext, Uri.parse(uriString), query)

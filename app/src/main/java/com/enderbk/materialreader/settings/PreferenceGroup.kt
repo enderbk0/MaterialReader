@@ -1,6 +1,7 @@
 package com.enderbk.materialreader.settings
 
 import androidx.compose.animation.core.animateDpAsState
+import com.enderbk.materialreader.ui.expressiveSpatial
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -105,6 +106,7 @@ fun SwitchPreferenceRow(
     val pressed by interaction.collectIsPressedAsState()
     val outer by animateDpAsState(
         targetValue = if (pressed) 48.dp else 24.dp,
+        animationSpec = expressiveSpatial(),
         label = "preferenceRowCorner"
     )
     Row(

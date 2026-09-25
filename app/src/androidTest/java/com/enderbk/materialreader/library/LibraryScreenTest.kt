@@ -31,7 +31,7 @@ class LibraryScreenTest {
                     settings = InMemorySettingsStore(),
                     meta = FakeMetaSource(),
                     onOpenReader = onOpenReader,
-                    onOpenSettings = {}
+                    floatingPill = false
                 )
             }
         }

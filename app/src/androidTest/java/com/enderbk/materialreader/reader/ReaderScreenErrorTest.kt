@@ -37,7 +37,6 @@ class ReaderScreenErrorTest {
                     readerBackground = ReaderBackground.DEFAULT,
                     darkTheme = false,
                     onBack = {},
-                    onOpenSettings = {}
                 )
             }
         }

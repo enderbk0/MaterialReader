@@ -14,6 +14,7 @@ object Routes {
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
     const val ABOUT = "about"
+    const val EXPERIMENTAL = "experimental"
     const val READER = "reader"
     const val ARG_DOC_ID = "docId"
     const val ARG_URI = "uri"

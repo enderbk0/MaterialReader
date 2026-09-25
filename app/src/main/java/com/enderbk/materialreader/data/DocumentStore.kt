@@ -11,6 +11,10 @@ import kotlinx.coroutines.flow.update
  */
 interface DocumentStore {
     val documents: Flow<List<DocumentEntry>>
+    /** User-created folder names, kept even when empty. */
+    val customFolders: Flow<Set<String>>
+    suspend fun addCustomFolder(name: String)
+    suspend fun removeCustomFolder(name: String)
     suspend fun upsert(entry: DocumentEntry)
     suspend fun remove(id: String)
     suspend fun setPinned(id: String, pinned: Boolean)
@@ -21,8 +25,19 @@ interface DocumentStore {
 /** In-memory implementation used by tests and Compose previews. */
 class InMemoryDocumentStore(initial: List<DocumentEntry> = emptyList()) : DocumentStore {
     private val state = MutableStateFlow(initial)
+    private val foldersState = MutableStateFlow(emptySet<String>())
 
     override val documents: Flow<List<DocumentEntry>> = state.asStateFlow()
+    override val customFolders: Flow<Set<String>> = foldersState.asStateFlow()
+
+    override suspend fun addCustomFolder(name: String) {
+        val clean = name.trim().take(48)
+        if (clean.isNotEmpty()) foldersState.update { it + clean }
+    }
+
+    override suspend fun removeCustomFolder(name: String) {
+        foldersState.update { it - name }
+    }
 
     override suspend fun upsert(entry: DocumentEntry) {
         state.update { list ->

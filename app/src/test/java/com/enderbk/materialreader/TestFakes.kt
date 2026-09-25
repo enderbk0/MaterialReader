@@ -63,6 +63,9 @@ class FakePdfDocument(
     override suspend fun renderPage(index: Int, targetWidthPx: Int): Bitmap =
         throw UnsupportedOperationException("No Bitmaps on the JVM")
 
+    override suspend fun renderNightPage(index: Int, targetWidthPx: Int): Bitmap =
+        throw UnsupportedOperationException("No Bitmaps on the JVM")
+
     override fun pageSizePoints(index: Int): Pair<Int, Int> =
         pageWidthPoints to pageHeightPoints
 
@@ -101,6 +104,9 @@ class FakeReaderBackend(
     }
 
     override suspend fun renderPage(document: PdfDocument, index: Int, widthPx: Int): Bitmap =
+        throw UnsupportedOperationException("No Bitmaps on the JVM")
+
+    override suspend fun renderNightPage(document: PdfDocument, index: Int, widthPx: Int): Bitmap =
         throw UnsupportedOperationException("No Bitmaps on the JVM")
 
     override suspend fun search(uriString: String, query: String): List<TextHit> = searchResult

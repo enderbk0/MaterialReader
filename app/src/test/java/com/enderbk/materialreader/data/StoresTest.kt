@@ -83,10 +83,20 @@ class SettingsStoreTest {
         assertTrue(settings.rememberReadingPosition)
         assertEquals(ReaderBackground.DEFAULT, settings.readerBackground)
         assertFalse(settings.nightMode)
+        assertFalse(settings.experimentalEnabled)
+        assertFalse(settings.floatingNavBar)
         assertEquals(SortOrder.RECENT, settings.sortOrder)
     }
 
     @Test
+    fun experimentalFlagsToggle() = runTest {
+        val store = InMemorySettingsStore()
+        store.update { it.copy(experimentalEnabled = true, floatingNavBar = true) }
+        val settings = store.settings.first()
+        assertTrue(settings.experimentalEnabled)
+        assertTrue(settings.floatingNavBar)
+    }
+
     fun updatesApplyInOrder() = runTest {
         val store = InMemorySettingsStore()
         store.update { it.copy(themeMode = ThemeMode.DARK) }

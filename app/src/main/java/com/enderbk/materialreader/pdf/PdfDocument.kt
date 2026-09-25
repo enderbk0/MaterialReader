@@ -12,6 +12,8 @@ import java.io.Closeable
 interface PdfDocument : Closeable {
     val pageCount: Int
     suspend fun renderPage(index: Int, targetWidthPx: Int): Bitmap
+    /** Night bitmap: text inverted, pictures preserved (CPU composite, cached). */
+    suspend fun renderNightPage(index: Int, targetWidthPx: Int): Bitmap
     fun pageSizePoints(index: Int): Pair<Int, Int>
     fun clearCache()
 }
@@ -22,6 +24,9 @@ class AndroidPdfDocument(private val session: PdfSession) : PdfDocument {
 
     override suspend fun renderPage(index: Int, targetWidthPx: Int): Bitmap =
         session.renderPage(index, targetWidthPx)
+
+    override suspend fun renderNightPage(index: Int, targetWidthPx: Int): Bitmap =
+        session.renderNightPage(index, targetWidthPx)
 
     override fun pageSizePoints(index: Int): Pair<Int, Int> =
         session.pageSizePoints(index)

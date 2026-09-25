@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -18,6 +19,7 @@ private val Context.libraryDataStore: DataStore<Preferences> by preferencesDataS
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 private val DocumentsJson = stringPreferencesKey("documents_json_v1")
+private val CustomFolders = stringSetPreferencesKey("custom_folders_v1")
 
 private val json = Json { ignoreUnknownKeys = true }
 
@@ -32,6 +34,25 @@ class DataStoreDocumentStore(private val context: Context) : DocumentStore {
         context.libraryDataStore.data
             .catch { emit(androidx.datastore.preferences.core.emptyPreferences()) }
             .map { prefs -> decode(prefs[DocumentsJson]) }
+
+    override val customFolders: Flow<Set<String>> =
+        context.libraryDataStore.data
+            .catch { emit(androidx.datastore.preferences.core.emptyPreferences()) }
+            .map { prefs -> prefs[CustomFolders].orEmpty() }
+
+    override suspend fun addCustomFolder(name: String) {
+        val clean = name.trim().take(48)
+        if (clean.isEmpty()) return
+        context.libraryDataStore.edit { prefs ->
+            prefs[CustomFolders] = prefs[CustomFolders].orEmpty() + clean
+        }
+    }
+
+    override suspend fun removeCustomFolder(name: String) {
+        context.libraryDataStore.edit { prefs ->
+            prefs[CustomFolders] = prefs[CustomFolders].orEmpty() - name
+        }
+    }
 
     override suspend fun upsert(entry: DocumentEntry) {
         mutate { list ->
@@ -89,6 +110,8 @@ private object ThemeKeys {
     val rememberPosition = booleanPreferencesKey("remember_reading_position")
     val readerBackground = stringPreferencesKey("reader_background")
     val nightMode = booleanPreferencesKey("night_mode")
+    val experimentalEnabled = booleanPreferencesKey("experimental_enabled")
+    val floatingNavBar = booleanPreferencesKey("floating_nav_bar")
     val sortOrder = stringPreferencesKey("sort_order")
 }
 
@@ -112,6 +135,8 @@ class DataStoreSettingsStore(private val context: Context) : SettingsStore {
                     readerBackground = prefs[ThemeKeys.readerBackground]?.let { runCatching { ReaderBackground.valueOf(it) }.getOrNull() }
                         ?: AppSettings().readerBackground,
                     nightMode = prefs[ThemeKeys.nightMode] ?: false,
+                    experimentalEnabled = prefs[ThemeKeys.experimentalEnabled] ?: false,
+                    floatingNavBar = prefs[ThemeKeys.floatingNavBar] ?: false,
                     sortOrder = prefs[ThemeKeys.sortOrder]?.let { runCatching { SortOrder.valueOf(it) }.getOrNull() }
                         ?: AppSettings().sortOrder
                 )
@@ -129,6 +154,8 @@ class DataStoreSettingsStore(private val context: Context) : SettingsStore {
             prefs[ThemeKeys.rememberPosition] = next.rememberReadingPosition
             prefs[ThemeKeys.readerBackground] = next.readerBackground.name
             prefs[ThemeKeys.nightMode] = next.nightMode
+            prefs[ThemeKeys.experimentalEnabled] = next.experimentalEnabled
+            prefs[ThemeKeys.floatingNavBar] = next.floatingNavBar
             prefs[ThemeKeys.sortOrder] = next.sortOrder.name
         }
     }

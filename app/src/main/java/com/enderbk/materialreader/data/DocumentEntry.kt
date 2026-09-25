@@ -19,7 +19,11 @@ data class DocumentEntry(
     val pageCount: Int? = null,
     val lastPage: Int = 0,
     val lastOpenedEpochMillis: Long = 0L,
-    val pinned: Boolean = false
+    val pinned: Boolean = false,
+    /** User folder name, or null for the ungrouped "All" collection. */
+    val folder: String? = null,
+    /** True when the file could not be opened (moved/deleted); offers relink. */
+    val missing: Boolean = false
 ) {
     companion object {
         fun idForUri(uri: String): String = uri.hashCode().toUInt().toString(16)

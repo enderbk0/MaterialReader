@@ -2,11 +2,15 @@ package com.enderbk.materialreader.settings
 
 import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -17,13 +21,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.enderbk.materialreader.ui.BleedTopBar
+import com.enderbk.materialreader.ui.TopBleedOverlay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,12 +43,12 @@ import com.enderbk.materialreader.data.SettingsStore
 import com.enderbk.materialreader.data.ThemeMode
 import com.enderbk.materialreader.data.ZoomMode
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     settings: SettingsStore,
     onBack: () -> Unit,
     onAboutClick: () -> Unit,
+    showBack: Boolean,
     modifier: Modifier = Modifier
 ) {
     val vm: SettingsViewModel = viewModel(factory = settingsViewModelFactory(settings))
@@ -51,20 +56,35 @@ fun SettingsScreen(
 
     Scaffold(
         modifier = modifier,
+        contentWindowInsets = ScaffoldDefaults.contentWindowInsets
+            .exclude(WindowInsets.navigationBars),
         topBar = {
-            TopAppBar(
+            BleedTopBar(
                 title = { Text("Settings") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                navigationIcon = if (showBack) {
+                    {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
+                } else {
+                    {}
                 }
             )
         }
     ) { padding ->
+        // When the floating pill replaces the bottom bar it overlays content:
+        // keep extra clearance so the last rows never hide underneath it.
+        val floatingPill = state.experimentalEnabled && state.floatingNavBar
+        Box(
+            modifier = Modifier.fillMaxSize().padding(padding)
+        ) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 32.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 16.dp, top = 8.dp, end = 16.dp,
+                bottom = if (floatingPill) 104.dp else 32.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             item { SectionHeader("Appearance") }
@@ -97,7 +117,6 @@ fun SettingsScreen(
                         title = "Reader background",
                         options = listOf(
                             ReaderBackground.DEFAULT to "Default",
-                            ReaderBackground.PAPER to "Paper",
                             ReaderBackground.DIM to "Dim"
                         ),
                         selected = state.readerBackground,
@@ -185,6 +204,8 @@ fun SettingsScreen(
                 }
             }
         }
+            TopBleedOverlay()
+    }
     }
 }
 

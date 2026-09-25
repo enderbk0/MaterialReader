@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -24,16 +24,27 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.foundation.Image
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.enderbk.materialreader.ui.BleedTopBar
+import com.enderbk.materialreader.ui.TopBleedOverlay
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.enderbk.materialreader.BuildConfig
+import com.enderbk.materialreader.data.AppSettings
+import com.enderbk.materialreader.data.SettingsStore
+import kotlinx.coroutines.launch
 import com.enderbk.materialreader.R
 
 const val CONTRIBUTORS_URL = "$REPOSITORY_URL/graphs/contributors"
@@ -44,17 +55,41 @@ const val LICENSE_URL = "https://www.apache.org/licenses/LICENSE-2.0"
  * top, then Project and dependency groups. Everything opens in the user's own
  * browser on explicit tap — the app itself stays offline.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(
+    settings: SettingsStore,
     onBack: () -> Unit,
+    onExperimentalClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val appSettings by settings.settings.collectAsState(initial = AppSettings())
+    var taps by remember { mutableIntStateOf(0) }
+
+    fun onVersionTap() {
+        if (appSettings.experimentalEnabled) {
+            onExperimentalClick()
+            return
+        }
+        taps++
+        when (taps) {
+            1 -> toast(context, "Only four step left \uD83D\uDE42")
+            2 -> toast(context, "Three to go \uD83D\uDE2F")
+            3 -> toast(context, "Almost \uD83E\uDEE0")
+            4 -> toast(context, "one moreeeee...\uD83D\uDE09")
+            else -> {
+                taps = 0
+                toast(context, "You have successfully unlocked Experimental settings! \uD83E\uDD73")
+                scope.launch { settings.update { it.copy(experimentalEnabled = true) } }
+                onExperimentalClick()
+            }
+        }
+    }
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            BleedTopBar(
                 title = { Text("About") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -64,8 +99,11 @@ fun AboutScreen(
             )
         }
     ) { padding ->
+        Box(
+            modifier = Modifier.fillMaxSize().padding(padding)
+        ) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -95,7 +133,12 @@ fun AboutScreen(
                     Text(
                         "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.clickable(
+                            role = Role.Button,
+                            onClickLabel = "Version",
+                            onClick = ::onVersionTap
+                        )
                     )
                     Text(
                         "Free and open-source PDF reader.",
@@ -137,7 +180,7 @@ fun AboutScreen(
                 PreferenceGroup {
                     NavigationPreferenceRow(
                         title = "Source code",
-                        subtitle = "github.com/enderbk/MaterialReader",
+                        subtitle = "github.com/enderbk0/MaterialReader",
                         position = RowPosition.TOP,
                         onClick = { openUrl(context, REPOSITORY_URL) },
                         external = true
@@ -178,7 +221,13 @@ fun AboutScreen(
                 }
             }
         }
+            TopBleedOverlay()
     }
+    }
+}
+
+private fun toast(context: Context, message: String) {
+    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 }
 
 private fun openUrl(context: Context, url: String) {

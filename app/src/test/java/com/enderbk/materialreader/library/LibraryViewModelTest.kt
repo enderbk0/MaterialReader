@@ -120,8 +120,101 @@ class LibraryViewModelTest {
     }
 
     @Test
-    fun openingEntryTouchesLastOpenedAndNavigates() = runTest(mainRule.dispatcher) {
-        docs.upsert(DocumentEntry("1", "u1", "Doc.pdf", lastOpenedEpochMillis = 0))
+    fun foldersMoveFilterAndVanish() = runTest(mainRule.dispatcher) {
+        docs.upsert(DocumentEntry("1", "u1", "Doc.pdf"))
+        docs.upsert(DocumentEntry("2", "u2", "Other.pdf"))
+        val states = mutableListOf<LibraryUiState>()
+        val c1 = launch { vm.uiState.collect { states.add(it) } }
+        try {
+            advanceUntilIdle()
+            assertTrue(states.last().folders.isEmpty())
+
+            vm.onMoveToFolder(docs.get("1")!!, "  Work  ")
+            advanceUntilIdle()
+            assertEquals("Work", docs.get("1")!!.folder)
+            assertEquals(listOf("Work"), states.last().folders)
+
+            vm.onSelectFolder("Work")
+            advanceUntilIdle()
+            assertEquals(listOf("1"), states.last().visible.map { it.id })
+
+            vm.onMoveToFolder(docs.get("1")!!, null)
+            advanceUntilIdle()
+            assertEquals(null, docs.get("1")!!.folder)
+            assertTrue(states.last().folders.isEmpty())
+        } finally {
+            c1.cancel()
+        }
+    }
+
+    @Test
+    fun customFoldersPersistFilterAndDelete() = runTest(mainRule.dispatcher) {
+        docs.upsert(DocumentEntry("1", "u1", "Doc.pdf"))
+        val states = mutableListOf<LibraryUiState>()
+        val c1 = launch { vm.uiState.collect { states.add(it) } }
+        try {
+            vm.onCreateFolder("  Docs  ")
+            advanceUntilIdle()
+            assertEquals(listOf("Docs"), states.last().folders)
+
+            vm.onMoveToFolder(docs.get("1")!!, "Docs")
+            vm.onSelectFolder("Docs")
+            advanceUntilIdle()
+            assertEquals(listOf("1"), states.last().visible.map { it.id })
+
+            vm.onDeleteFolder("Docs")
+            advanceUntilIdle()
+            assertTrue(states.last().folders.isEmpty())
+            assertEquals(null, docs.get("1")!!.folder)
+            assertEquals(listOf("1"), states.last().visible.map { it.id })
+        } finally {
+            c1.cancel()
+        }
+    }
+
+    @Test
+    fun relinkClearsMissingAndOpens() = runTest(mainRule.dispatcher) {
+        docs.upsert(DocumentEntry("9", "content://gone", "Gone.pdf", missing = true))
+        val opened = mutableListOf<String>()
+        val c1 = launch { vm.openDocument.collect { opened += it } }
+        try {
+            vm.onRelink(docs.get("9")!!, "content://com.example/found")
+            advanceUntilIdle()
+            val got = docs.get("9")!!
+            assertEquals("content://com.example/found", got.uri)
+            assertEquals("Picked.pdf", got.displayName)
+            assertEquals(false, got.missing)
+            assertEquals(listOf("9"), opened)
+        } finally {
+            c1.cancel()
+        }
+    }
+
+    @Test
+    fun moveFollowsDocumentAcrossFilters() = runTest(mainRule.dispatcher) {
+        docs.upsert(DocumentEntry("1", "u1", "Doc.pdf"))
+        val states = mutableListOf<LibraryUiState>()
+        val c1 = launch { vm.uiState.collect { states.add(it) } }
+        try {
+            advanceUntilIdle()
+
+            vm.onMoveToFolder(docs.get("1")!!, "Work")
+            advanceUntilIdle()
+            assertEquals("Work", states.last().selectedFolder)
+            assertEquals(listOf("1"), states.last().visible.map { it.id })
+
+            // Moving out lands back on All instead of an empty filter.
+            vm.onMoveToFolder(docs.get("1")!!, null)
+            advanceUntilIdle()
+            assertEquals(null, states.last().selectedFolder)
+            assertEquals(listOf("1"), states.last().visible.map { it.id })
+        } finally {
+            c1.cancel()
+        }
+    }
+
+    @Test
+    fun openingEntryTouchesLastOpenedAndNavigates() = runTest(mainRule.dispatcher) {        docs.upsert(DocumentEntry("1", "u1", "Doc.pdf", lastOpenedEpochMillis = 0))
         val opened = mutableListOf<String>()
         val c1 = launch { vm.openDocument.collect { opened += it } }
         try {

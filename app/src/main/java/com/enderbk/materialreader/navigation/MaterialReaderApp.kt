@@ -1,6 +1,12 @@
 package com.enderbk.materialreader.navigation
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -9,8 +15,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -24,8 +31,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -38,6 +47,9 @@ import com.enderbk.materialreader.library.LibraryScreen
 import com.enderbk.materialreader.pdf.ReaderBackend
 import com.enderbk.materialreader.reader.ReaderScreen
 import com.enderbk.materialreader.settings.AboutScreen
+import com.enderbk.materialreader.settings.ExperimentalScreen
+import com.enderbk.materialreader.ui.expressiveEffects
+import com.enderbk.materialreader.ui.expressiveSpatial
 import com.enderbk.materialreader.settings.SettingsScreen
 import com.enderbk.materialreader.ui.theme.MaterialReaderTheme
 
@@ -82,16 +94,25 @@ fun MaterialReaderApp(
             val backStack by navController.currentBackStackEntryAsState()
             val currentRoute = backStack?.destination?.route
             val showSuite = currentRoute == Routes.LIBRARY || currentRoute == Routes.SETTINGS
+            // The floating pill replaces the standard suite wherever it shows.
+            val floatingOn = (appSettings?.experimentalEnabled == true) &&
+                (appSettings?.floatingNavBar == true)
+            // Settings is a tab when reached from the library: no back arrow.
+            // Reached from the reader/about, it keeps one.
+            val showSettingsBack = navController.previousBackStackEntry
+                ?.destination?.route?.let { it != Routes.LIBRARY && it != Routes.SETTINGS }
+                ?: false
 
+            Box(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxSize()) {
-                if (showSuite && useRail) {
+                if (showSuite && useRail && !floatingOn) {
                     NavigationRailSuite(
                         currentRoute = currentRoute,
                         onLibrary = {
-                            navController.navigate(Routes.LIBRARY) { launchSingleTop = true }
+                            navController.navigateTab(Routes.LIBRARY)
                         },
                         onSettings = {
-                            navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                            navController.navigateTab(Routes.SETTINGS)
                         }
                     )
                 }
@@ -107,14 +128,14 @@ fun MaterialReaderApp(
                         .exclude(WindowInsets.statusBars)
                         .exclude(WindowInsets.navigationBars),
                     bottomBar = {
-                        if (showSuite && !useRail) {
+                        if (showSuite && !useRail && !floatingOn) {
                             BottomSuite(
                                 currentRoute = currentRoute,
                                 onLibrary = {
-                                    navController.navigate(Routes.LIBRARY) { launchSingleTop = true }
+                                    navController.navigateTab(Routes.LIBRARY)
                                 },
                                 onSettings = {
-                                    navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                                    navController.navigateTab(Routes.SETTINGS)
                                 }
                             )
                         }
@@ -135,7 +156,7 @@ fun MaterialReaderApp(
                                 onOpenReader = { id ->
                                     navController.navigate(Routes.readerForDocument(id))
                                 },
-                                onOpenSettings = { navController.navigate(Routes.SETTINGS) }
+                                floatingPill = floatingOn
                             )
                         }
                         composable(
@@ -154,25 +175,72 @@ fun MaterialReaderApp(
                                 readerBackground = appSettings?.readerBackground
                                     ?: com.enderbk.materialreader.data.ReaderBackground.DEFAULT,
                                 darkTheme = darkTheme,
-                                onBack = { navController.popBackStack() },
-                                onOpenSettings = { navController.navigate(Routes.SETTINGS) }
+                                onBack = { navController.popBackStack() }
                             )
                         }
                         composable(Routes.SETTINGS) {
                             SettingsScreen(
                                 settings = settings,
                                 onBack = { navController.popBackStack() },
-                                onAboutClick = { navController.navigate(Routes.ABOUT) }
+                                onAboutClick = { navController.navigate(Routes.ABOUT) },
+                                showBack = showSettingsBack
                             )
                         }
                         composable(Routes.ABOUT) {
                             AboutScreen(
+                                settings = settings,
+                                onBack = { navController.popBackStack() },
+                                onExperimentalClick = { navController.navigate(Routes.EXPERIMENTAL) }
+                            )
+                        }
+                        composable(Routes.EXPERIMENTAL) {
+                            ExperimentalScreen(
+                                settings = settings,
                                 onBack = { navController.popBackStack() }
                             )
                         }
                     }
                 }
+                }
+                AnimatedVisibility(
+                    visible = showSuite && floatingOn,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    enter = fadeIn(expressiveEffects()) +
+                        scaleIn(expressiveSpatial(), initialScale = 0.85f),
+                    exit = fadeOut(expressiveEffects()) +
+                        scaleOut(expressiveSpatial(), targetScale = 0.85f)
+                ) {
+                    FloatingNavBar(
+                        currentRoute = currentRoute,
+                        onLibrary = {
+                            navController.navigateTab(Routes.LIBRARY)
+                        },
+                        onSettings = {
+                            navController.navigateTab(Routes.SETTINGS)
+                        },
+                        modifier = Modifier
+                            .windowInsetsPadding(WindowInsets.navigationBars)
+                            .padding(bottom = 12.dp)
+                    )
+                }
             }
+        }
+    }
+}
+
+/**
+ * Tab navigation that preloads once and retains: saveState/restoreState keep
+ * each tab's ViewModel, scroll position, and composed content alive across
+ * tab switches, so returning to Settings/Library is instant instead of a
+ * cold rebuild every visit. Pushed screens (reader/about/experimental) keep
+ * plain back-stack behavior.
+ */
+private fun androidx.navigation.NavHostController.navigateTab(route: String) {
+    navigate(route) {
+        launchSingleTop = true
+        restoreState = true
+        popUpTo(Routes.LIBRARY) {
+            saveState = true
         }
     }
 }
@@ -187,7 +255,7 @@ private fun BottomSuite(
         NavigationBarItem(
             selected = currentRoute == Routes.LIBRARY,
             onClick = onLibrary,
-            icon = { Icon(Icons.Filled.Home, contentDescription = null) },
+            icon = { Icon(Icons.Filled.History, contentDescription = null) },
             label = { Text("Library") }
         )
         NavigationBarItem(
@@ -209,7 +277,7 @@ private fun NavigationRailSuite(
         NavigationRailItem(
             selected = currentRoute == Routes.LIBRARY,
             onClick = onLibrary,
-            icon = { Icon(Icons.Filled.Home, contentDescription = null) },
+            icon = { Icon(Icons.Filled.History, contentDescription = null) },
             label = { Text("Library") }
         )
         NavigationRailItem(

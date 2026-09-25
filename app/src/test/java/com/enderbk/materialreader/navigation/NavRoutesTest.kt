@@ -18,6 +18,7 @@ class NavRoutesTest {
         assertEquals("library", Routes.LIBRARY)
         assertEquals("settings", Routes.SETTINGS)
         assertEquals("about", Routes.ABOUT)
+        assertEquals("experimental", Routes.EXPERIMENTAL)
     }
 
     @Test

@@ -12,7 +12,7 @@ enum class ZoomMode { FIT_WIDTH, FIT_PAGE, ACTUAL_SIZE }
 enum class PageLayout { CONTINUOUS, SINGLE_PAGE }
 
 /** Reader background preference. */
-enum class ReaderBackground { DEFAULT, PAPER, DIM }
+enum class ReaderBackground { DEFAULT, DIM }
 
 /** Library sort order. Persisted so it survives restarts. */
 enum class SortOrder { RECENT, NAME, SIZE }
@@ -28,5 +28,9 @@ data class AppSettings(
     val readerBackground: ReaderBackground = ReaderBackground.DEFAULT,
     /** Night mode inverts page colors (dark text becomes light) for dark environments. */
     val nightMode: Boolean = false,
+    /** Master switch for experimental features (unlocked via the About easter egg). */
+    val experimentalEnabled: Boolean = false,
+    /** Floating pill navigation instead of the bottom bar (needs master switch). */
+    val floatingNavBar: Boolean = false,
     val sortOrder: SortOrder = SortOrder.RECENT
 )

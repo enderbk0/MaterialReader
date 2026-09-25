@@ -8,10 +8,18 @@ import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import com.enderbk.materialreader.data.AppSettings
+import com.enderbk.materialreader.data.ThemeMode
+import com.enderbk.materialreader.settings.PreferenceGroup
+import com.enderbk.materialreader.settings.RowPosition
+import com.enderbk.materialreader.settings.SegmentedPreferenceRow
+import com.enderbk.materialreader.settings.SwitchPreferenceRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,6 +42,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
@@ -55,6 +65,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import com.enderbk.materialreader.ui.expressiveEffects
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -62,21 +73,23 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import com.enderbk.materialreader.ui.BleedTopBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -97,12 +110,6 @@ import com.enderbk.materialreader.pdf.PageLink
 import com.enderbk.materialreader.pdf.ReaderBackend
 import com.enderbk.materialreader.pdf.TextHit
 import com.enderbk.materialreader.pdf.userMessage
-import com.enderbk.materialreader.ui.theme.ReaderDarkDefault
-import com.enderbk.materialreader.ui.theme.ReaderDarkDim
-import com.enderbk.materialreader.ui.theme.ReaderDarkPaper
-import com.enderbk.materialreader.ui.theme.ReaderLightDefault
-import com.enderbk.materialreader.ui.theme.ReaderLightDim
-import com.enderbk.materialreader.ui.theme.ReaderLightSepia
 import com.enderbk.materialreader.util.formatPageIndicator
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -117,7 +124,6 @@ fun ReaderScreen(
     readerBackground: ReaderBackground,
     darkTheme: Boolean,
     onBack: () -> Unit,
-    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val vm: ReaderViewModel = viewModel(
@@ -127,8 +133,20 @@ fun ReaderScreen(
     val ui by vm.ui.collectAsState()
     val context = LocalContext.current
     val view = LocalView.current
+    var detailsOpen by remember { mutableStateOf(false) }
+    var quickSettingsOpen by remember { mutableStateOf(false) }
+    val quickVm: com.enderbk.materialreader.settings.SettingsViewModel = viewModel(
+        key = "reader-quick-settings",
+        factory = com.enderbk.materialreader.settings.settingsViewModelFactory(settings)
+    )
+    val quickSettings by quickVm.uiState.collectAsState()
 
-    val background = readerBackgroundColor(readerBackground, darkTheme)
+    val appearance = resolvePdfAppearance(
+        nightMode = ui.nightMode,
+        background = readerBackground,
+        darkTheme = darkTheme
+    )
+    val background = appearance.background
 
     DisposableEffect(keepScreenAwake, ui.status) {
         view.keepScreenOn = keepScreenAwake && ui.status == ReaderStatus.Ready
@@ -146,7 +164,8 @@ fun ReaderScreen(
                     onClose = { vm.setSearchActive(false) }
                 )
             } else {
-                TopAppBar(
+                BleedTopBar(
+                    containerColor = background,
                     title = {
                         Text(
                             ui.entry?.displayName ?: "Reader",
@@ -169,15 +188,23 @@ fun ReaderScreen(
                         }
                         ReaderOverflowMenu(
                             ui = ui,
-                            onZoomIn = { vm.onUserScale(ui.userScale * 1.25f) },
-                            onZoomOut = { vm.onUserScale(ui.userScale / 1.25f) },
+                            onZoomIn = { vm.zoomBy(1.25f) },
+                            onZoomOut = { vm.zoomBy(1f / 1.25f) },
                             onZoomMode = vm::onZoomModeChange,
                             onLayout = vm::onLayoutChange,
                             onNightMode = vm::onNightModeChange,
-                            onOpenSettings = onOpenSettings
+                            onPrint = {
+                                val entry = ui.entry
+                                if (entry != null) printPdf(context, entry.uri, entry.displayName)
+                            },
+                            onShare = {
+                                val entry = ui.entry
+                                if (entry != null) sharePdf(context, entry.uri)
+                            },
+                            onDetails = { detailsOpen = true },
+                            onOpenSettings = { quickSettingsOpen = true }
                         )
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = background)
                 )
             }
         },
@@ -187,8 +214,8 @@ fun ReaderScreen(
                     ui = ui,
                     onPrev = vm::onPrevPage,
                     onNext = vm::onNextPage,
-                    onZoomIn = { vm.onUserScale(ui.userScale * 1.25f) },
-                    onZoomOut = { vm.onUserScale(ui.userScale / 1.25f) },
+                    onZoomIn = { vm.zoomBy(1.25f) },
+                    onZoomOut = { vm.zoomBy(1f / 1.25f) },
                     onJumpClick = { vm.setJumpDialog(true) }
                 )
             }
@@ -218,7 +245,11 @@ fun ReaderScreen(
                             viewportWidth = maxWidth,
                             viewportHeight = maxHeight,
                             background = background,
-                            render = vm::renderPage,
+                            render = if (appearance.path == PdfRenderPath.NIGHT) {
+                                vm::renderNightPage
+                            } else {
+                                vm::renderPage
+                            },
                             aspectFor = vm::pageAspectPoints,
                             pointsWidthFor = { index -> vm.pageSizePoints(index)?.first },
                             onPageSettled = vm::onPageSettled,
@@ -229,6 +260,15 @@ fun ReaderScreen(
                     }
                 }
             }
+        }
+
+        if (detailsOpen && ui.entry != null) {
+            DocumentDetailsDialog(
+                entry = ui.entry!!,
+                currentPage = ui.currentPage,
+                pageCount = ui.pageCount,
+                onDismiss = { detailsOpen = false }
+            )
         }
 
         if (ui.jumpDialogOpen) {
@@ -254,15 +294,23 @@ fun ReaderScreen(
                 )
             }
         }
+
+        if (quickSettingsOpen) {
+            ModalBottomSheet(
+                onDismissRequest = { quickSettingsOpen = false },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ) {
+                QuickSettingsSheet(
+                    settings = quickSettings,
+                    onThemeMode = quickVm::setThemeMode,
+                    onNightMode = quickVm::setNightMode,
+                    onKeepAwake = quickVm::setKeepAwake,
+                    onReaderBackground = quickVm::setReaderBackground
+                )
+            }
+        }
     }
 }
-
-private fun readerBackgroundColor(background: ReaderBackground, darkTheme: Boolean): Color =
-    when (background) {
-        ReaderBackground.DEFAULT -> if (darkTheme) ReaderDarkDefault else ReaderLightDefault
-        ReaderBackground.PAPER -> if (darkTheme) ReaderDarkPaper else ReaderLightSepia
-        ReaderBackground.DIM -> if (darkTheme) ReaderDarkDim else ReaderLightDim
-    }
 
 @Composable
 private fun ReaderLoading(modifier: Modifier = Modifier) {
@@ -319,7 +367,7 @@ private fun ReaderSearchBar(
     onClose: () -> Unit
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
-    TopAppBar(
+    BleedTopBar(
         title = {
             OutlinedTextField(
                 value = query,
@@ -427,8 +475,12 @@ private fun ReaderOverflowMenu(
     onZoomMode: (ZoomMode) -> Unit,
     onLayout: (PageLayout) -> Unit,
     onNightMode: (Boolean) -> Unit,
+    onPrint: () -> Unit,
+    onShare: () -> Unit,
+    onDetails: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
+
     var expanded by remember { mutableStateOf(false) }
     val ready = ui.status == ReaderStatus.Ready
     Box {
@@ -505,6 +557,34 @@ private fun ReaderOverflowMenu(
             )
             HorizontalDivider()
             DropdownMenuItem(
+                text = { Text("Print") },
+                leadingIcon = { Icon(Icons.Filled.Print, contentDescription = null) },
+                enabled = ready,
+                onClick = {
+                    expanded = false
+                    onPrint()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Share document") },
+                leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
+                enabled = ready,
+                onClick = {
+                    expanded = false
+                    onShare()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Details") },
+                leadingIcon = { Icon(Icons.Filled.Info, contentDescription = null) },
+                enabled = ready,
+                onClick = {
+                    expanded = false
+                    onDetails()
+                }
+            )
+            HorizontalDivider()
+            DropdownMenuItem(
                 text = { Text("Settings") },
                 leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
                 onClick = { expanded = false; onOpenSettings() }
@@ -548,7 +628,8 @@ private fun ReaderBottomBar(
             Spacer(Modifier.weight(1f))
             TextButton(onClick = onJumpClick) {
                 Text(
-                    formatPageIndicator(ui.currentPage + 1, ui.pageCount),
+                    formatPageIndicator(ui.currentPage + 1, ui.pageCount) +
+                        if (ui.userScale != 1f) " • ${(ui.userScale * 100).toInt()}%" else "",
                     style = MaterialTheme.typography.titleMedium
                 )
             }
@@ -582,37 +663,57 @@ private fun ReaderContent(
 ) {
     val density = LocalDensity.current
     val latestScale by rememberUpdatedState(ui.userScale)
+    // Finger anchor (LazyColumn coordinates, px): while pinching, scale
+    // changes are compensated around this point so content stays under the
+    // fingers instead of drifting. Null when no pinch is active.
+    var pinchAnchorY by remember { mutableStateOf<Float?>(null) }
     val pinch = Modifier.pointerInput(Unit) {
         // Photo-style two-finger zoom, tracked manually: the stock transform
         // detector lets the scroll container steal two-finger moves, so pinch
-        // silently did nothing. Here single-finger moves are never touched
-        // (scroll keeps working) while two-finger moves are consumed and turn
-        // into zoom — exactly like zooming a picture.
+        // silently did nothing. Single-finger moves are never touched (scroll
+        // keeps working) while two-finger moves are consumed and turn into
+        // zoom — exactly like zooming a picture.
+        //
+        // Zoom factor ACCUMULATES per gesture against the scale at gesture
+        // start: per-frame deltas below the VM's throttle would otherwise be
+        // dropped with their motion lost forever, freezing slow pinches.
         awaitEachGesture {
             awaitFirstDown(requireUnconsumed = false)
             var previousDistance = 0f
             var pinching = false
+            var base = latestScale
+            var cumulative = 1f
             while (true) {
                 val event = awaitPointerEvent()
                 val pressed = event.changes.filter { it.pressed }
                 if (pressed.size < 2) {
                     pinching = false
                     previousDistance = 0f
+                    pinchAnchorY = null
                     if (pressed.isEmpty()) break
                     continue
                 }
                 val distance = (pressed[0].position - pressed[1].position).getDistance()
+                pinchAnchorY = (pressed[0].position.y + pressed[1].position.y) / 2f
                 if (!pinching) {
+                    // Arm immediately AND consume: otherwise this first frame
+                    // leaks to the scroll container and the list starts moving
+                    // under the fingers before zoom takes over.
                     pinching = true
                     previousDistance = distance
+                    base = latestScale
+                    cumulative = 1f
+                    pressed.forEach { it.consume() }
                     continue
                 }
                 if (previousDistance > 0f && distance > 0f && distance != previousDistance) {
                     pressed.forEach { it.consume() }
-                    onUserScale((latestScale * (distance / previousDistance)).coerceIn(0.5f, 5f))
+                    cumulative *= distance / previousDistance
+                    onUserScale((base * cumulative).coerceIn(0.5f, 5f))
                 }
                 previousDistance = distance
             }
+            pinchAnchorY = null
         }
     }
 
@@ -625,7 +726,7 @@ private fun ReaderContent(
             render = render,
             aspectFor = aspectFor,
             pointsWidthFor = pointsWidthFor,
-            onDoubleTapZoom = onDoubleTapZoom
+            onDoubleTapZoom = onDoubleTapZoom,
         )
     } else {
         val listState = rememberLazyListState()
@@ -640,25 +741,68 @@ private fun ReaderContent(
                 consumeScrollRequest()
             }
         }
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize().then(pinch),
-            contentPadding = PaddingValues(vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            items(count = ui.pageCount, key = { it }) { index ->
-                ContinuousPage(
-                    index = index,
-                    ui = ui,
-                    viewportWidth = viewportWidth,
-                    viewportHeight = viewportHeight,
-                    densityScale = density.density,
-                    render = render,
-                    aspectFor = aspectFor,
-                    pointsWidthFor = pointsWidthFor,
-                    onDoubleTapZoom = onDoubleTapZoom,
-                    background = background
+        // Finger-anchored pinch: when the scale changes mid-pinch, shift the
+        // scroll offset so the content point under the fingers stays put.
+        // (Single-page mode is center-anchored instead; there is no list.)
+        var lastScale by remember { mutableFloatStateOf(ui.userScale) }
+        LaunchedEffect(ui.userScale) {
+            val previous = lastScale
+            lastScale = ui.userScale
+            val anchor = pinchAnchorY
+            if (anchor != null && previous > 0f && ui.userScale != previous) {
+                val ratio = ui.userScale / previous
+                val offset = listState.firstVisibleItemScrollOffset
+                val corrected = ((offset + anchor) * ratio - anchor).toInt().coerceAtLeast(0)
+                listState.scrollToItem(listState.firstVisibleItemIndex, corrected)
+            }
+        }
+        Box(modifier = Modifier.fillMaxSize()) {
+        // While zoomed the list locks: one finger pans the zoomed page
+        // freely in 2D (photo-style) instead of fighting the scroll.
+            LazyColumn(
+                state = listState,
+                userScrollEnabled = ui.userScale <= 1.02f,
+                modifier = Modifier.fillMaxSize().then(pinch),
+                contentPadding = PaddingValues(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                items(count = ui.pageCount, key = { it }) { index ->
+                    ContinuousPage(
+                        index = index,
+                        ui = ui,
+                        viewportWidth = viewportWidth,
+                        viewportHeight = viewportHeight,
+                        densityScale = density.density,
+                        render = render,
+                        aspectFor = aspectFor,
+                        pointsWidthFor = pointsWidthFor,
+                        onDoubleTapZoom = onDoubleTapZoom,
+                        background = background,
+                    )
+                }
+            }
+            // Soft top glow instead of a hard rectangle: fades in while the list
+            // moves, fades out when it settles. Purely visual, never consumes touch.
+            val glowAlpha by animateFloatAsState(
+                targetValue = if (listState.isScrollInProgress) 1f else 0f,
+                animationSpec = expressiveEffects(),
+                label = "scrollGlow"
+            )
+            if (glowAlpha > 0.01f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(88.dp)
+                        .graphicsLayer { alpha = glowAlpha }
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
                 )
             }
         }
@@ -676,7 +820,7 @@ private fun ContinuousPage(
     aspectFor: (Int) -> Float?,
     pointsWidthFor: (Int) -> Int?,
     onDoubleTapZoom: () -> Unit,
-    background: Color
+    background: Color,
 ) {
     val aspect = remember(index, ui.pageCount) { aspectFor(index) }
     val width = remember(ui.zoomMode, ui.userScale, viewportWidth, viewportHeight, aspect, index) {
@@ -685,7 +829,17 @@ private fun ContinuousPage(
         }
     }
     val renderPx = remember(width, densityScale) {
-        ((width.value * densityScale + 79) / 80 * 80).toInt().coerceIn(240, 2560)
+        ((width.value * densityScale + 159) / 160 * 160).toInt().coerceIn(240, 2048)
+    }
+    val maxPanPx = remember(width, aspect, viewportWidth, viewportHeight, densityScale) {
+        val widthPx = width.value * densityScale
+        val heightPx = widthPx / (aspect ?: (1f / 1.4142f))
+        panBounds(
+            contentW = widthPx,
+            contentH = heightPx,
+            viewportW = viewportWidth.value * densityScale,
+            viewportH = viewportHeight.value * densityScale
+        )
     }
     PdfPageItem(
         index = index,
@@ -695,7 +849,9 @@ private fun ContinuousPage(
         aspect = aspect,
         render = render,
         onDoubleTapZoom = onDoubleTapZoom,
-        nightMode = ui.nightMode
+        pannable = ui.userScale > 1.02f,
+        maxPanPx = maxPanPx,
+        night = ui.nightMode
     )
 }
 
@@ -708,7 +864,7 @@ private fun SinglePageContent(
     render: suspend (index: Int, widthPx: Int) -> Bitmap?,
     aspectFor: (Int) -> Float?,
     pointsWidthFor: (Int) -> Int?,
-    onDoubleTapZoom: () -> Unit
+    onDoubleTapZoom: () -> Unit,
 ) {
     val density = LocalDensity.current
     val index = ui.currentPage
@@ -719,7 +875,17 @@ private fun SinglePageContent(
         }
     }
     val renderPx = remember(width) {
-        ((width.value * density.density + 79) / 80 * 80).toInt().coerceIn(240, 2560)
+        ((width.value * density.density + 159) / 160 * 160).toInt().coerceIn(240, 2048)
+    }
+    val maxPanPx = remember(width, aspect, viewportWidth, viewportHeight) {
+        val widthPx = width.value * density.density
+        val heightPx = widthPx / (aspect ?: (1f / 1.4142f))
+        panBounds(
+            contentW = widthPx,
+            contentH = heightPx,
+            viewportW = viewportWidth.value * density.density,
+            viewportH = viewportHeight.value * density.density
+        )
     }
     Box(
         modifier = Modifier.fillMaxSize().then(pinch),
@@ -733,33 +899,11 @@ private fun SinglePageContent(
             aspect = aspect,
             render = render,
             onDoubleTapZoom = onDoubleTapZoom,
-            nightMode = ui.nightMode
+            pannable = ui.userScale > 1.02f,
+            maxPanPx = maxPanPx,
+            night = ui.nightMode
         )
     }
-}
-
-private fun pageWidth(
-    mode: ZoomMode,
-    userScale: Float,
-    viewportWidth: Dp,
-    viewportHeight: Dp,
-    aspect: Float?,
-    pointsWidth: () -> Int?
-): Dp {
-    val base = when (mode) {
-        ZoomMode.FIT_WIDTH -> viewportWidth
-        ZoomMode.FIT_PAGE -> {
-            val ratio = aspect ?: (1f / 1.4142f)
-            val fitHeight = viewportHeight * ratio
-            if (fitHeight < viewportWidth) fitHeight else viewportWidth
-        }
-        ZoomMode.ACTUAL_SIZE -> {
-            // 1 PDF point = 1/72 inch; 1 dp = 1/160 inch → points × 160/72 dp.
-            val pts = pointsWidth() ?: 612
-            Dp(pts * 160f / 72f)
-        }
-    }
-    return (base * userScale).coerceAtLeast(48.dp)
 }
 
 @Composable
@@ -912,5 +1056,175 @@ private fun openLink(context: Context, uri: String) {
     val ok = runCatching { context.startActivity(intent); true }.getOrDefault(false)
     if (!ok) {
         Toast.makeText(context, "No app can open this link.", Toast.LENGTH_SHORT).show()
+    }
+}
+
+/** Sends the PDF bytes straight to the system print service. Fully offline. */
+private fun printPdf(context: Context, uriString: String, jobName: String) {
+    val printManager = context.getSystemService(Context.PRINT_SERVICE) as android.print.PrintManager
+    runCatching {
+        printManager.print(jobName, PdfPrintAdapter(context.applicationContext, uriString, jobName), null)
+    }
+}
+
+private class PdfPrintAdapter(
+    private val appContext: Context,
+    private val uriString: String,
+    private val jobName: String
+) : android.print.PrintDocumentAdapter() {
+    override fun onLayout(
+        oldAttributes: android.print.PrintAttributes?,
+        newAttributes: android.print.PrintAttributes?,
+        cancellationSignal: android.os.CancellationSignal?,
+        callback: android.print.PrintDocumentAdapter.LayoutResultCallback?,
+        extras: android.os.Bundle?
+    ) {
+        if (cancellationSignal?.isCanceled == true) {
+            callback?.onLayoutCancelled()
+            return
+        }
+        val info = android.print.PrintDocumentInfo.Builder(jobName)
+            .setContentType(android.print.PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+            .build()
+        callback?.onLayoutFinished(info, true)
+    }
+
+    override fun onWrite(
+        pages: Array<android.print.PageRange>,
+        destination: android.os.ParcelFileDescriptor,
+        cancellationSignal: android.os.CancellationSignal?,
+        callback: android.print.PrintDocumentAdapter.WriteResultCallback?
+    ) {
+        try {
+            appContext.contentResolver.openInputStream(android.net.Uri.parse(uriString))?.use { input ->
+                java.io.FileOutputStream(destination.fileDescriptor).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            callback?.onWriteFinished(arrayOf(android.print.PageRange.ALL_PAGES))
+        } catch (e: Exception) {
+            callback?.onWriteFailed(e.message)
+        }
+    }
+}
+
+/** Shares the PDF file itself with another app (read permission granted). */
+private fun sharePdf(context: Context, uriString: String) {
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "application/pdf"
+        putExtra(Intent.EXTRA_STREAM, android.net.Uri.parse(uriString))
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    runCatching {
+        context.startActivity(Intent.createChooser(intent, "Share PDF"))
+    }
+}
+
+@Composable
+private fun DocumentDetailsDialog(
+    entry: com.enderbk.materialreader.data.DocumentEntry,
+    currentPage: Int,
+    pageCount: Int,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Details") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                DetailRow("Name", entry.displayName)
+                DetailRow(
+                    "Size",
+                    com.enderbk.materialreader.util.formatBytes(entry.sizeBytes)
+                )
+                if (pageCount > 0) {
+                    DetailRow("Pages", pageCount.toString())
+                    DetailRow(
+                        "Position",
+                        formatPageIndicator(currentPage + 1, pageCount)
+                    )
+                }
+                DetailRow("Folder", entry.folder ?: "All")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Column {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+/** Minimal in-reader settings: theme, night mode, keep-awake. No navigation. */
+@Composable
+private fun QuickSettingsSheet(
+    settings: AppSettings,
+    onThemeMode: (ThemeMode) -> Unit,
+    onNightMode: (Boolean) -> Unit,
+    onKeepAwake: (Boolean) -> Unit,
+    onReaderBackground: (ReaderBackground) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            "Quick settings",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        PreferenceGroup {
+            SegmentedPreferenceRow(
+                title = "Theme",
+                options = listOf(
+                    ThemeMode.SYSTEM to "System",
+                    ThemeMode.LIGHT to "Light",
+                    ThemeMode.DARK to "Dark"
+                ),
+                selected = settings.themeMode,
+                onSelect = onThemeMode,
+                position = RowPosition.TOP
+            )
+            SwitchPreferenceRow(
+                title = "Night mode",
+                subtitle = "Invert page colors for reading in the dark",
+                checked = settings.nightMode,
+                onCheckedChange = onNightMode,
+                position = RowPosition.MIDDLE
+            )
+            SwitchPreferenceRow(
+                title = "Keep screen awake",
+                subtitle = "Prevent the display from sleeping",
+                checked = settings.keepScreenAwake,
+                onCheckedChange = onKeepAwake,
+                position = RowPosition.MIDDLE
+            )
+            SegmentedPreferenceRow(
+                title = "Reader background",
+                options = listOf(
+                    ReaderBackground.DEFAULT to "Default",
+                    ReaderBackground.DIM to "Dim"
+                ),
+                selected = settings.readerBackground,
+                onSelect = onReaderBackground,
+                position = RowPosition.BOTTOM
+            )
+        }
     }
 }

@@ -82,4 +82,28 @@ class LibraryLogicTest {
         assertFalse(entry("a", "x.pdf", lastPage = 0).hasRestorablePosition())
         assertTrue(entry("a", "x.pdf", lastPage = 4).hasRestorablePosition())
     }
+
+    @Test
+    fun mergeFoldersUnionsAndCleans() {
+        assertEquals(
+            listOf("Personal", "Work"),
+            mergeFolders(listOf("Work", "Work"), setOf("Personal", "  ", "Work"))
+        )
+        assertEquals(emptyList<String>(), mergeFolders(emptyList(), emptySet()))
+    }
+
+    @Test
+    fun foldersDistinctSortedAndFiltered() {
+        val docs = listOf(
+            entry("a", "a.pdf").copy(folder = "Work"),
+            entry("b", "b.pdf").copy(folder = "Personal"),
+            entry("c", "c.pdf").copy(folder = "Work"),
+            entry("d", "d.pdf"),
+            entry("e", "e.pdf").copy(folder = "  ")
+        )
+        assertEquals(listOf("Personal", "Work"), docs.distinctFolders())
+        assertEquals(listOf("a", "c"), docs.filteredByFolder("Work").map { it.id })
+        assertEquals(5, docs.filteredByFolder(null).size)
+        assertTrue(docs.filteredByFolder("Missing").isEmpty())
+    }
 }

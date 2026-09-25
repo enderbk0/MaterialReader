@@ -22,9 +22,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 sealed interface ReaderStatus {
     data object Loading : ReaderStatus
@@ -81,6 +84,21 @@ class ReaderViewModel(
 
     init {
         viewModelScope.launch { bootstrap() }
+        // Single source of truth: the settings store owns night mode, so the
+        // quick sheet, the overflow menu, and the Settings screen all drive
+        // the live reader through this flow. The echo of our own writes is
+        // suppressed by distinctUntilChanged + the equality guard.
+        viewModelScope.launch {
+            settings.settings
+                .map { it.nightMode }
+                .distinctUntilChanged()
+                .collect { enabled ->
+                    _ui.update { state ->
+                        if (state.nightMode == enabled) state
+                        else state.copy(nightMode = enabled)
+                    }
+                }
+        }
     }
 
     private suspend fun bootstrap() {
@@ -117,7 +135,16 @@ class ReaderViewModel(
             return
         }
         if (!backend.canOpen(entry.uri)) {
-            _ui.update { it.copy(entry = entry, status = ReaderStatus.Error(PdfOpenFailure.PermissionLost)) }
+            // The file is gone (or its grant died): flag it missing so the
+            // library can offer relink/remove instead of a dead error panel.
+            val missing = entry.copy(missing = true)
+            documents.upsert(missing)
+            _ui.update {
+                it.copy(
+                    entry = missing,
+                    status = ReaderStatus.Error(PdfOpenFailure.FileNotFound)
+                )
+            }
             return
         }
         try {
@@ -150,6 +177,12 @@ class ReaderViewModel(
     suspend fun renderPage(index: Int, widthPx: Int): Bitmap? {
         val d = document ?: return null
         return runCatching { backend.renderPage(d, index, widthPx) }.getOrNull()
+    }
+
+    /** Night variant (pictures preserved); null when the document is not open. */
+    suspend fun renderNightPage(index: Int, widthPx: Int): Bitmap? {
+        val d = document ?: return null
+        return runCatching { backend.renderNightPage(d, index, widthPx) }.getOrNull()
     }
 
     fun pageAspectPoints(index: Int): Float? {
@@ -189,12 +222,34 @@ class ReaderViewModel(
     }
 
     fun onUserScale(scale: Float) {
-        _ui.update { it.copy(userScale = scale.coerceIn(MIN_SCALE, MAX_SCALE)) }
+        val clamped = scale.coerceIn(MIN_SCALE, MAX_SCALE)
+        // Throttle pinch streams: micro-changes would recompose the whole
+        // reader per gesture event. Below 0.5% nothing visible changes.
+        val current = _ui.value.userScale
+        if (current != 0f && abs(clamped - current) / current < 0.005f) return
+        _ui.update { it.copy(userScale = clamped) }
     }
 
     fun onToggleDoubleTapZoom() {
         val current = _ui.value.userScale
-        _ui.update { it.copy(userScale = if (current > 1.25f) 1f else 2.5f) }
+        val next = if (current > 1.25f) 1f else 2.5f
+        _ui.update {
+            it.copy(
+                userScale = next,
+                // Re-anchor on the current page so the view does not drift
+                // while the layout grows around it.
+                scrollRequest = it.currentPage
+            )
+        }
+    }
+
+    /**
+     * Discrete zoom step (buttons, menu). Unlike pinch it re-anchors the
+     * list on the current page so zooming never shifts position.
+     */
+    fun zoomBy(factor: Float) {
+        val clamped = (_ui.value.userScale * factor).coerceIn(MIN_SCALE, MAX_SCALE)
+        _ui.update { it.copy(userScale = clamped, scrollRequest = it.currentPage) }
     }
 
     fun onZoomModeChange(mode: ZoomMode) {
@@ -272,6 +327,12 @@ class ReaderViewModel(
             val text = runCatching { backend.pageText(uriString, page) }.getOrDefault("")
             val links = runCatching { backend.pageLinks(uriString, page) }.getOrDefault(emptyList())
             _ui.update { it.copy(pageTextLoading = false, pageText = text, pageLinks = links) }
+        }
+    }
+
+    fun removeFromLibrary() {
+        viewModelScope.launch {
+            _ui.value.entry?.let { documents.remove(it.id) }
         }
     }
 

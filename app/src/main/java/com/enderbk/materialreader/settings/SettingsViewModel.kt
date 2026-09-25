@@ -29,6 +29,8 @@ class SettingsViewModel(private val settings: SettingsStore) : ViewModel() {
     fun setRememberPosition(enabled: Boolean) = edit { it.copy(rememberReadingPosition = enabled) }
     fun setReaderBackground(background: ReaderBackground) = edit { it.copy(readerBackground = background) }
     fun setNightMode(enabled: Boolean) = edit { it.copy(nightMode = enabled) }
+    fun setExperimentalEnabled(enabled: Boolean) = edit { it.copy(experimentalEnabled = enabled) }
+    fun setFloatingNavBar(enabled: Boolean) = edit { it.copy(floatingNavBar = enabled) }
 }
 
 @Suppress("UNCHECKED_CAST")

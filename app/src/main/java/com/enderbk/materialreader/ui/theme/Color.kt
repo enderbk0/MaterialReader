@@ -14,8 +14,6 @@ val Pink40 = Color(0xFF7D5260)
 // Applied only to the reader background when the user selects a non-default
 // reader background in Settings.
 val ReaderLightDefault = Color(0xFFF7F2E9)
-val ReaderLightSepia = Color(0xFFF3E8D2)
 val ReaderLightDim = Color(0xFFE7E0D2)
 val ReaderDarkDefault = Color(0xFF121212)
 val ReaderDarkDim = Color(0xFF1C1B1F)
-val ReaderDarkPaper = Color(0xFF211B13)

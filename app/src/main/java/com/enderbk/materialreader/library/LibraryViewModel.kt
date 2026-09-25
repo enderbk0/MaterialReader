@@ -9,7 +9,10 @@ import com.enderbk.materialreader.data.DocumentEntry
 import com.enderbk.materialreader.data.DocumentStore
 import com.enderbk.materialreader.data.SettingsStore
 import com.enderbk.materialreader.data.SortOrder
+import com.enderbk.materialreader.domain.distinctFolders
+import com.enderbk.materialreader.domain.filteredByFolder
 import com.enderbk.materialreader.domain.filteredByQuery
+import com.enderbk.materialreader.domain.mergeFolders
 import com.enderbk.materialreader.domain.sortedForLibrary
 import com.enderbk.materialreader.util.DocumentMeta
 import com.enderbk.materialreader.util.queryDocumentMeta
@@ -22,6 +25,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -61,7 +65,10 @@ data class LibraryUiState(
     val query: String = "",
     val sortOrder: SortOrder = SortOrder.RECENT,
     val totalCount: Int = 0,
-    val isEmpty: Boolean = true
+    val isEmpty: Boolean = true,
+    val folders: List<String> = emptyList(),
+    /** Null = "All" collection. */
+    val selectedFolder: String? = null
 )
 
 class LibraryViewModel(
@@ -72,25 +79,18 @@ class LibraryViewModel(
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
+    private val selectedFolder = MutableStateFlow<String?>(null)
 
     val searchQuery = query.asStateFlow()
 
     val uiState = combine(
         documents.documents,
         settings.settings,
-        query
-    ) { docs, appSettings, q ->
-        val visible = docs.filteredByQuery(q).sortedForLibrary(appSettings.sortOrder)
-        LibraryUiState(
-            visible = visible,
-            pinned = visible.filter { it.pinned },
-            recent = visible.filterNot { it.pinned },
-            query = q,
-            sortOrder = appSettings.sortOrder,
-            totalCount = docs.size,
-            isEmpty = docs.isEmpty()
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+        query,
+        selectedFolder,
+        documents.customFolders,
+        ::combineLibraryState
+    ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
     /** Emits the library id to open in the reader. */
     private val _openDocument = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -98,6 +98,36 @@ class LibraryViewModel(
 
     fun onQueryChange(value: String) {
         query.value = value
+    }
+
+    fun onSelectFolder(folder: String?) {
+        selectedFolder.value = folder
+    }
+
+    fun onCreateFolder(name: String) {
+        viewModelScope.launch { documents.addCustomFolder(name) }
+    }
+
+    fun onDeleteFolder(folder: String) {
+        viewModelScope.launch {
+            documents.removeCustomFolder(folder)
+            documents.documents.first().filter { it.folder == folder }.forEach {
+                documents.upsert(it.copy(folder = null))
+            }
+            // A deleted filter must not keep pointing at a folder that is gone.
+            if (selectedFolder.value == folder) selectedFolder.value = null
+        }
+    }
+
+    /** Moves a document, creating the folder if it is new. Null removes it. */
+    fun onMoveToFolder(entry: DocumentEntry, folder: String?) {
+        val clean = folder?.trim()?.takeIf { it.isNotEmpty() }
+        viewModelScope.launch {
+            documents.upsert(entry.copy(folder = clean))
+            // Follow the document: never strand the user on a filter that no
+            // longer contains it (e.g. moving out must land back on All).
+            selectedFolder.value = clean
+        }
     }
 
     fun onSortChange(order: SortOrder) {
@@ -115,6 +145,26 @@ class LibraryViewModel(
 
     fun onTogglePin(entry: DocumentEntry) {
         viewModelScope.launch { documents.setPinned(entry.id, !entry.pinned) }
+    }
+
+    /** Points an entry at a newly picked file (relink after it went missing). */
+    fun onRelink(entry: DocumentEntry, newUriString: String) {
+        viewModelScope.launch {
+            withContext(io) { meta.persistPermission(newUriString) }
+            val info = withContext(io) {
+                runCatching { meta.describe(newUriString) }.getOrNull()
+            }
+            documents.upsert(
+                entry.copy(
+                    uri = newUriString,
+                    displayName = info?.displayName ?: entry.displayName,
+                    sizeBytes = info?.sizeBytes ?: entry.sizeBytes,
+                    missing = false,
+                    lastOpenedEpochMillis = System.currentTimeMillis()
+                )
+            )
+            _openDocument.emit(entry.id)
+        }
     }
 
     fun onRemove(entry: DocumentEntry) {
@@ -155,6 +205,30 @@ class LibraryViewModel(
             _openDocument.emit(entry.id)
         }
     }
+}
+
+private fun combineLibraryState(
+    docs: List<DocumentEntry>,
+    appSettings: com.enderbk.materialreader.data.AppSettings,
+    q: String,
+    folder: String?,
+    custom: Set<String>
+): LibraryUiState {
+    val visible = docs
+        .filteredByFolder(folder)
+        .filteredByQuery(q)
+        .sortedForLibrary(appSettings.sortOrder)
+    return LibraryUiState(
+        visible = visible,
+        pinned = visible.filter { it.pinned },
+        recent = visible.filterNot { it.pinned },
+        query = q,
+        sortOrder = appSettings.sortOrder,
+        totalCount = docs.size,
+        isEmpty = docs.isEmpty(),
+        folders = mergeFolders(docs.distinctFolders(), custom),
+        selectedFolder = folder
+    )
 }
 
 @Suppress("UNCHECKED_CAST")

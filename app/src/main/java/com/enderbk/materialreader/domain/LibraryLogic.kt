@@ -31,6 +31,22 @@ fun List<DocumentEntry>.filteredByQuery(query: String): List<DocumentEntry> {
     return filter { it.displayName.contains(q, ignoreCase = true) }
 }
 
+/** Folder names in use, sorted. Empty folders vanish automatically. */
+fun List<DocumentEntry>.distinctFolders(): List<String> =
+    mapNotNull { it.folder?.trim()?.takeIf { name -> name.isNotEmpty() } }
+        .distinct()
+        .sorted()
+
+/** Keeps only [folder], or everything when null ("All"). */
+fun List<DocumentEntry>.filteredByFolder(folder: String?): List<DocumentEntry> =
+    if (folder == null) this else filter { it.folder == folder }
+
+/** All folders: derived from documents plus user-created empties, sorted. */
+fun mergeFolders(derived: List<String>, custom: Set<String>): List<String> =
+    (derived + custom.map { it.trim() }.filter { it.isNotEmpty() })
+        .distinct()
+        .sorted()
+
 /** Reading progress in 0..1, or null when the page count is unknown. */
 fun DocumentEntry.progress(): Float? {
     val total = pageCount

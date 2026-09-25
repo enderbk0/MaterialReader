@@ -1,5 +1,9 @@
 package com.enderbk.materialreader.reader
 
+import com.enderbk.materialreader.pdf.applyMatrix
+import com.enderbk.materialreader.pdf.hueRotateMatrix
+import com.enderbk.materialreader.pdf.nightModeMatrix
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

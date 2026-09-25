@@ -22,7 +22,8 @@ class SettingsScreenTest {
                 SettingsScreen(
                     settings = InMemorySettingsStore(),
                     onBack = {},
-                    onAboutClick = {}
+                    onAboutClick = {},
+                    showBack = false
                 )
             }
         }

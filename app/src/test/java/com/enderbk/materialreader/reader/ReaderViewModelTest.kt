@@ -110,17 +110,20 @@ class ReaderViewModelTest {
     }
 
     @Test
-    fun lostPermissionSurfacesError() = runTest(mainRule.dispatcher) {
+    fun unopenableMarksMissingAndOffersRemove() = runTest(mainRule.dispatcher) {
         backend.canOpenResult = false
         val viewModel = vm()
         val states = mutableListOf<ReaderUiState>()
         val collect = launch { viewModel.ui.collect { states.add(it) } }
         advanceUntilIdle()
 
-        assertEquals(
-            ReaderStatus.Error(PdfOpenFailure.PermissionLost),
-            states.last().status
-        )
+        val last = states.last()
+        assertEquals(ReaderStatus.Error(PdfOpenFailure.FileNotFound), last.status)
+        assertEquals(true, docs.get("doc1")!!.missing)
+
+        viewModel.removeFromLibrary()
+        advanceUntilIdle()
+        assertEquals(null, docs.get("doc1"))
         collect.cancel()
     }
 
@@ -187,8 +190,55 @@ class ReaderViewModelTest {
     }
 
     @Test
-    fun nightModeTogglePersists() = runTest(mainRule.dispatcher) {
+    fun zoomStateUpdatesAndSessionOpensOnce() = runTest(mainRule.dispatcher) {
         val viewModel = vm()
+        advanceUntilIdle()
+        assertEquals(1, backend.openedSessions.size)
+
+        // Sub-threshold pinch noise is coalesced, not applied per frame.
+        viewModel.onUserScale(1.004f)
+        assertEquals(1f, viewModel.ui.value.userScale, 0.0001f)
+
+        // Full sweep up and back down through states the UI must reflect.
+        viewModel.onUserScale(1.25f)
+        assertEquals(1.25f, viewModel.ui.value.userScale, 0.0001f)
+        viewModel.onUserScale(1.5f)
+        assertEquals(1.5f, viewModel.ui.value.userScale, 0.0001f)
+        viewModel.onUserScale(2f)
+        assertEquals(2f, viewModel.ui.value.userScale, 0.0001f)
+        viewModel.onUserScale(1f)
+        assertEquals(1f, viewModel.ui.value.userScale, 0.0001f)
+
+        viewModel.onUserScale(99f)
+        assertEquals(5f, viewModel.ui.value.userScale, 0.0001f)
+
+        // No re-open across zoom updates: one session for the whole visit.
+        advanceUntilIdle()
+        assertEquals(1, backend.openedSessions.size)
+    }
+
+    @Test
+    fun nightModeFollowsExternalStoreChanges() = runTest(mainRule.dispatcher) {
+        // The quick sheet writes the store directly (no ViewModel call): the
+        // live reader must still follow, otherwise toggles appear dead.
+        val viewModel = vm()
+        val states = mutableListOf<ReaderUiState>()
+        val collect = launch { viewModel.ui.collect { states.add(it) } }
+        advanceUntilIdle()
+        assertFalse(states.last().nightMode)
+
+        settings.update { it.copy(nightMode = true) }
+        advanceUntilIdle()
+        assertTrue(states.last().nightMode)
+
+        settings.update { it.copy(nightMode = false) }
+        advanceUntilIdle()
+        assertFalse(states.last().nightMode)
+        collect.cancel()
+    }
+
+    @Test
+    fun nightModeTogglePersists() = runTest(mainRule.dispatcher) {        val viewModel = vm()
         advanceUntilIdle()
         assertFalse(viewModel.ui.value.nightMode)
 
