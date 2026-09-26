@@ -1,0 +1,2 @@
+New app icon, true edge-to-edge zoom past 100% with finger anchoring,
+night mode that preserves photographs, and locale fixes.
