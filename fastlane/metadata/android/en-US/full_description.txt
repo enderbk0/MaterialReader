@@ -1,0 +1,23 @@
+Open a PDF. Read it. That's it.
+
+MaterialReader is a free and open-source PDF reader focused on making
+reading PDFs simple and pleasant. There are no accounts, no subscriptions,
+no advertisements, no analytics, and no cloud services. Reading a PDF never
+requires paying money, creating an account, watching an advertisement, or
+uploading the document.
+
+Library features:
+- Recent and favorite PDFs, folders, search, and sorting
+- System document picker with persisted access
+- Missing-file detection with one-tap relink
+
+Reader features:
+- Smooth scrolling with pinch, double-tap, and button zoom
+- Offline text search, selectable page text, copy, share, and links
+- Night mode that preserves photographs
+- Print, details, jump-to-page, and reading-position memory
+
+Privacy:
+- Zero permissions declared, including no internet permission
+- Everything stays on your device
+- Open source under the Apache License 2.0

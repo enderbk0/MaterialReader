@@ -20,24 +20,30 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    def keystoreProperties = new Properties()
+    // Release signing is optional: with keystore.properties present (local
+    // maintainer builds) the release APK is signed; without it (CI,
+    // F-Droid builders) the build still succeeds unsigned and the
+    // distributor signs it. Never commit keys (see .gitignore).
     def keystorePropertiesFile = rootProject.file("keystore.properties")
-    if (keystorePropertiesFile.exists()) {
+    def hasReleaseKeys = keystorePropertiesFile.exists()
+    if (hasReleaseKeys) {
+        def keystoreProperties = new Properties()
         keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-    }
-
-    signingConfigs {
-        release {
-            storeFile file(keystoreProperties['storeFile'] ?: "missing.keystore")
-            storePassword keystoreProperties['storePassword']
-            keyAlias keystoreProperties['keyAlias']
-            keyPassword keystoreProperties['keyPassword']
+        signingConfigs {
+            release {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
         }
     }
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.release
+            if (hasReleaseKeys) {
+                signingConfig signingConfigs.release
+            }
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }

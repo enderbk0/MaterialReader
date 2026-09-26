@@ -1,0 +1,3 @@
+First stable release: library with folders and search, full reader with
+zoom/search/night mode/print, per-app languages, welcome screen, and
+privacy-first offline architecture.
