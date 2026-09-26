@@ -16,3 +16,4 @@ local.properties
 # Release signing (never commit the real key or passwords)
 /materialreader-release.keystore
 /keystore.properties
+*.idsig
