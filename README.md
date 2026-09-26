@@ -1,15 +1,23 @@
+<div align="center">
+
+<img src="design/iconcenter-cropped.png" alt="MaterialReader" width="180">
+
 # MaterialReader
+**Open a PDF. Read it. That's it.**
 
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
 ![Release](https://img.shields.io/github/v/release/enderbk0/MaterialReader)
 ![Platform](https://img.shields.io/badge/platform-Android%2024%2B-3DDC84?logo=android)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.3-purple?logo=kotlin)
 ![Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202026.09-4285F4?logo=jetpackcompose)
+
 ![Ads](https://img.shields.io/badge/ads-none-green)
 ![Tracking](https://img.shields.io/badge/tracking-none-green)
 ![Accounts](https://img.shields.io/badge/accounts-none-green)
 
-> **Open a PDF. Read it. That's it.**
+</div>
+
+
 
 MaterialReader is a free and open-source PDF reader for Android. No accounts.
 No subscriptions. No ads. No analytics. No cloud. Reading a PDF never
