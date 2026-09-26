@@ -66,6 +66,9 @@ class FakePdfDocument(
     override suspend fun renderNightPage(index: Int, targetWidthPx: Int): Bitmap =
         throw UnsupportedOperationException("No Bitmaps on the JVM")
 
+    override suspend fun pageMode(index: Int) =
+        com.enderbk.materialreader.pdf.NightPageMode.INVERT_ALL
+
     override fun pageSizePoints(index: Int): Pair<Int, Int> =
         pageWidthPoints to pageHeightPoints
 
@@ -108,6 +111,12 @@ class FakeReaderBackend(
 
     override suspend fun renderNightPage(document: PdfDocument, index: Int, widthPx: Int): Bitmap =
         throw UnsupportedOperationException("No Bitmaps on the JVM")
+
+    var pageModeResult: com.enderbk.materialreader.pdf.NightPageMode =
+        com.enderbk.materialreader.pdf.NightPageMode.INVERT_ALL
+
+    override suspend fun pageMode(document: PdfDocument, index: Int) =
+        pageModeResult
 
     override suspend fun search(uriString: String, query: String): List<TextHit> = searchResult
 

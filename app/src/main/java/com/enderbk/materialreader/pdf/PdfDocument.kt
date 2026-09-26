@@ -14,6 +14,8 @@ interface PdfDocument : Closeable {
     suspend fun renderPage(index: Int, targetWidthPx: Int): Bitmap
     /** Night bitmap: text inverted, pictures preserved (CPU composite, cached). */
     suspend fun renderNightPage(index: Int, targetWidthPx: Int): Bitmap
+    /** Classification actually used for [index] (cached per session). */
+    suspend fun pageMode(index: Int): NightPageMode
     fun pageSizePoints(index: Int): Pair<Int, Int>
     fun clearCache()
 }
@@ -27,6 +29,10 @@ class AndroidPdfDocument(private val session: PdfSession) : PdfDocument {
 
     override suspend fun renderNightPage(index: Int, targetWidthPx: Int): Bitmap =
         session.renderNightPage(index, targetWidthPx)
+
+    override suspend fun pageMode(index: Int): NightPageMode =
+        runCatching { session.pageNightRegions(index).mode }
+            .getOrDefault(NightPageMode.INVERT_ALL)
 
     override fun pageSizePoints(index: Int): Pair<Int, Int> =
         session.pageSizePoints(index)

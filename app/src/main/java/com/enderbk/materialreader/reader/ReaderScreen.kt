@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import com.enderbk.materialreader.data.AppSettings
 import com.enderbk.materialreader.data.ThemeMode
 import com.enderbk.materialreader.settings.PreferenceGroup
@@ -82,6 +84,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import com.enderbk.materialreader.pdf.NightPageMode
+import com.enderbk.materialreader.pdf.formatArgs
+import com.enderbk.materialreader.pdf.messageRes
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -98,6 +103,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
+import com.enderbk.materialreader.R
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -108,8 +115,8 @@ import com.enderbk.materialreader.data.SettingsStore
 import com.enderbk.materialreader.data.ZoomMode
 import com.enderbk.materialreader.pdf.PageLink
 import com.enderbk.materialreader.pdf.ReaderBackend
+import com.enderbk.materialreader.pdf.PdfOpenFailure
 import com.enderbk.materialreader.pdf.TextHit
-import com.enderbk.materialreader.pdf.userMessage
 import com.enderbk.materialreader.util.formatPageIndicator
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -134,6 +141,16 @@ fun ReaderScreen(
     val context = LocalContext.current
     val view = LocalView.current
     var detailsOpen by remember { mutableStateOf(false) }
+    // Diagnostic: which render path the current page actually took. Loaded
+    // only while the dialog is open so it costs nothing otherwise.
+    var detailsNightMode by remember { mutableStateOf<NightPageMode?>(null) }
+    LaunchedEffect(detailsOpen, ui.nightMode, ui.currentPage) {
+        detailsNightMode = if (detailsOpen && ui.nightMode) {
+            vm.pageNightMode(ui.currentPage)
+        } else {
+            null
+        }
+    }
     var quickSettingsOpen by remember { mutableStateOf(false) }
     val quickVm: com.enderbk.materialreader.settings.SettingsViewModel = viewModel(
         key = "reader-quick-settings",
@@ -168,23 +185,23 @@ fun ReaderScreen(
                     containerColor = background,
                     title = {
                         Text(
-                            ui.entry?.displayName ?: "Reader",
+                            ui.entry?.displayName ?: stringResource(R.string.reader_fallback_title),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to library")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.desc_back_to_library))
                         }
                     },
                     actions = {
                         val ready = ui.status == ReaderStatus.Ready
                         IconButton(onClick = { vm.setSearchActive(true) }, enabled = ready) {
-                            Icon(Icons.Filled.Search, contentDescription = "Search in this PDF")
+                            Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.desc_search_in_pdf))
                         }
                         IconButton(onClick = { vm.setTextSheet(true) }, enabled = ready) {
-                            Icon(Icons.Filled.Description, contentDescription = "Page text, copy and links")
+                            Icon(Icons.Filled.Description, contentDescription = stringResource(R.string.desc_page_text))
                         }
                         ReaderOverflowMenu(
                             ui = ui,
@@ -193,6 +210,7 @@ fun ReaderScreen(
                             onZoomMode = vm::onZoomModeChange,
                             onLayout = vm::onLayoutChange,
                             onNightMode = vm::onNightModeChange,
+                            darkTheme = darkTheme,
                             onPrint = {
                                 val entry = ui.entry
                                 if (entry != null) printPdf(context, entry.uri, entry.displayName)
@@ -223,8 +241,34 @@ fun ReaderScreen(
     ) { padding ->
         when (val status = ui.status) {
             ReaderStatus.Loading -> ReaderLoading(Modifier.fillMaxSize().padding(padding))
-            is ReaderStatus.Error -> ReaderErrorPanel(
-                message = status.failure.userMessage(ui.entry?.displayName ?: "This document"),
+            is ReaderStatus.Error -> if (status.failure == PdfOpenFailure.FileNotFound && ui.entry != null) {
+                val missingName = ui.entry!!.displayName
+                AlertDialog(
+                    onDismissRequest = onBack,
+                    title = { Text(stringResource(R.string.reader_not_found_title)) },
+                    text = { Text(stringResource(R.string.reader_not_found_body, missingName)) },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                vm.removeFromLibrary()
+                                onBack()
+                            }
+                        ) { Text(stringResource(R.string.reader_not_found_yes)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = onBack) {
+                            Text(stringResource(R.string.reader_not_found_no))
+                        }
+                    }
+                )
+            } else ReaderErrorPanel(
+                message = stringResource(
+                    status.failure.messageRes(),
+                    *status.failure.formatArgs(
+                        ui.entry?.displayName
+                            ?: stringResource(R.string.reader_fallback_title)
+                    )
+                ),
                 onRetry = vm::retry,
                 onBack = onBack,
                 modifier = Modifier.fillMaxSize().padding(padding)
@@ -263,10 +307,20 @@ fun ReaderScreen(
         }
 
         if (detailsOpen && ui.entry != null) {
+            val appearanceLabel = when {
+                !ui.nightMode -> "Normal"
+                detailsNightMode == null -> "Night (analyzing…)"
+                detailsNightMode == NightPageMode.INVERT_ALL -> "Night · text invert"
+                detailsNightMode == NightPageMode.INVERT_WITH_DIMMED_IMAGES -> "Night · photos preserved"
+                else -> "Night · dimmed"
+            }
             DocumentDetailsDialog(
                 entry = ui.entry!!,
                 currentPage = ui.currentPage,
                 pageCount = ui.pageCount,
+                appearance = appearanceLabel,
+                appTheme = if (darkTheme) stringResource(R.string.reader_details_dark) else stringResource(R.string.reader_details_light),
+                nightToggle = if (ui.nightMode) stringResource(R.string.reader_details_on) else stringResource(R.string.reader_details_off),
                 onDismiss = { detailsOpen = false }
             )
         }
@@ -302,6 +356,7 @@ fun ReaderScreen(
             ) {
                 QuickSettingsSheet(
                     settings = quickSettings,
+                    nightAvailable = darkTheme,
                     onThemeMode = quickVm::setThemeMode,
                     onNightMode = quickVm::setNightMode,
                     onKeepAwake = quickVm::setKeepAwake,
@@ -321,7 +376,7 @@ private fun ReaderLoading(modifier: Modifier = Modifier) {
     ) {
         CircularProgressIndicator()
         Spacer(Modifier.height(16.dp))
-        Text("Opening document…", style = MaterialTheme.typography.bodyLarge)
+        Text(stringResource(R.string.reader_opening), style = MaterialTheme.typography.bodyLarge)
     }
 }
 
@@ -344,7 +399,7 @@ private fun ReaderErrorPanel(
             tint = MaterialTheme.colorScheme.error
         )
         Spacer(Modifier.height(16.dp))
-        Text("Couldn't open this PDF", style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.reader_error_title), style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(8.dp))
         Text(
             message,
@@ -353,8 +408,8 @@ private fun ReaderErrorPanel(
         )
         Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onBack) { Text("Back to library") }
-            FilledTonalButton(onClick = onRetry) { Text("Try again") }
+            OutlinedButton(onClick = onBack) { Text(stringResource(R.string.desc_back_to_library)) }
+            FilledTonalButton(onClick = onRetry) { Text(stringResource(R.string.reader_retry)) }
         }
     }
 }
@@ -373,12 +428,12 @@ private fun ReaderSearchBar(
                 value = query,
                 onValueChange = onQueryChange,
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Search in document") },
+                placeholder = { Text(stringResource(R.string.reader_search_hint)) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
                         IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.desc_clear_search))
                         }
                     }
                 },
@@ -389,7 +444,7 @@ private fun ReaderSearchBar(
         },
         navigationIcon = {
             IconButton(onClick = onClose) {
-                Icon(Icons.Filled.Close, contentDescription = "Close search")
+                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.desc_close_search))
             }
         }
     )
@@ -410,13 +465,13 @@ private fun SearchResults(
             ) {
                 CircularProgressIndicator()
                 Spacer(Modifier.height(12.dp))
-                Text("Searching…")
+                Text(stringResource(R.string.reader_searching))
             }
         }
         !ui.searchSearched -> {
             Box(modifier, contentAlignment = Alignment.Center) {
                 Text(
-                    "Type to search the document text.",
+                    stringResource(R.string.reader_search_idle),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -424,7 +479,7 @@ private fun SearchResults(
         ui.searchHits.isEmpty() -> {
             Box(modifier, contentAlignment = Alignment.Center) {
                 Text(
-                    "No matches for \"${ui.searchQuery}\".",
+                    stringResource(R.string.reader_search_no_matches, ui.searchQuery),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -433,7 +488,7 @@ private fun SearchResults(
             LazyColumn(modifier = modifier, contentPadding = PaddingValues(bottom = 24.dp)) {
                 item(key = "hits-header") {
                     Text(
-                        "${ui.searchHits.size} match${if (ui.searchHits.size == 1) "" else "es"}",
+                        if (ui.searchHits.size == 1) stringResource(R.string.reader_match_single) else stringResource(R.string.reader_matches, ui.searchHits.size),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
@@ -443,7 +498,7 @@ private fun SearchResults(
                     item(key = "hit-$index-${hit.pageIndex}") {
                         ListItem(
                             headlineContent = {
-                                Text("Page ${hit.pageIndex + 1}", style = MaterialTheme.typography.titleSmall)
+                                Text(stringResource(R.string.reader_hit_page, hit.pageIndex + 1), style = MaterialTheme.typography.titleSmall)
                             },
                             supportingContent = {
                                 Text(hit.snippet, maxLines = 3, overflow = TextOverflow.Ellipsis)
@@ -457,7 +512,7 @@ private fun SearchResults(
                                 .fillMaxWidth()
                                 .padding(horizontal = 12.dp)
                         ) {
-                            Text("Go to page ${hit.pageIndex + 1}")
+                            Text(stringResource(R.string.reader_go_to_page, hit.pageIndex + 1))
                         }
                         HorizontalDivider(Modifier.padding(horizontal = 20.dp))
                     }
@@ -475,6 +530,7 @@ private fun ReaderOverflowMenu(
     onZoomMode: (ZoomMode) -> Unit,
     onLayout: (PageLayout) -> Unit,
     onNightMode: (Boolean) -> Unit,
+    darkTheme: Boolean,
     onPrint: () -> Unit,
     onShare: () -> Unit,
     onDetails: () -> Unit,
@@ -485,7 +541,7 @@ private fun ReaderOverflowMenu(
     val ready = ui.status == ReaderStatus.Ready
     Box {
         IconButton(onClick = { expanded = true }) {
-            Icon(Icons.Filled.MoreVert, contentDescription = "Reader options")
+            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.desc_reader_options))
         }
         DropdownMenu(
             expanded = expanded,
@@ -494,13 +550,13 @@ private fun ReaderOverflowMenu(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
         ) {
             DropdownMenuItem(
-                text = { Text("Zoom in") },
+                text = { Text(stringResource(R.string.reader_zoom_in)) },
                 leadingIcon = { Icon(Icons.Filled.ZoomIn, contentDescription = null) },
                 enabled = ready,
                 onClick = { expanded = false; onZoomIn() }
             )
             DropdownMenuItem(
-                text = { Text("Zoom out") },
+                text = { Text(stringResource(R.string.reader_zoom_out)) },
                 leadingIcon = { Icon(Icons.Filled.ZoomOut, contentDescription = null) },
                 enabled = ready,
                 onClick = { expanded = false; onZoomOut() }
@@ -512,15 +568,15 @@ private fun ReaderOverflowMenu(
                     text = {
                         Text(
                             when (mode) {
-                                ZoomMode.FIT_WIDTH -> "Fit width"
-                                ZoomMode.FIT_PAGE -> "Fit page"
-                                ZoomMode.ACTUAL_SIZE -> "Actual size"
+                                ZoomMode.FIT_WIDTH -> stringResource(R.string.reader_fit_width)
+                                ZoomMode.FIT_PAGE -> stringResource(R.string.reader_fit_page)
+                                ZoomMode.ACTUAL_SIZE -> stringResource(R.string.reader_actual_size)
                             }
                         )
                     },
                     trailingIcon = {
                         if (selected) {
-                            Icon(Icons.Filled.Check, contentDescription = "Selected")
+                            Icon(Icons.Filled.Check, contentDescription = null)
                         }
                     },
                     enabled = ready,
@@ -530,7 +586,7 @@ private fun ReaderOverflowMenu(
             HorizontalDivider()
             DropdownMenuItem(
                 text = {
-                    Text(if (ui.layout == PageLayout.CONTINUOUS) "Single page view" else "Continuous scroll")
+                    Text(if (ui.layout == PageLayout.CONTINUOUS) stringResource(R.string.reader_single_page) else stringResource(R.string.reader_continuous))
                 },
                 enabled = ready,
                 onClick = {
@@ -538,18 +594,19 @@ private fun ReaderOverflowMenu(
                     onLayout(if (ui.layout == PageLayout.CONTINUOUS) PageLayout.SINGLE_PAGE else PageLayout.CONTINUOUS)
                 }
             )
+            // Single-fire toggle: the Switch is display-only (like the
+            // settings rows) so one tap can never toggle twice and cancel
+            // itself out. The whole row is the tap target.
             DropdownMenuItem(
-                text = { Text("Night mode") },
+                text = { Text(stringResource(R.string.reader_night_mode)) },
                 trailingIcon = {
                     Switch(
-                        checked = ui.nightMode,
-                        onCheckedChange = {
-                            expanded = false
-                            onNightMode(it)
-                        }
+                        checked = ui.nightMode && darkTheme,
+                        enabled = ready && darkTheme,
+                        onCheckedChange = null
                     )
                 },
-                enabled = ready,
+                enabled = ready && darkTheme,
                 onClick = {
                     expanded = false
                     onNightMode(!ui.nightMode)
@@ -557,7 +614,7 @@ private fun ReaderOverflowMenu(
             )
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text("Print") },
+                text = { Text(stringResource(R.string.reader_print)) },
                 leadingIcon = { Icon(Icons.Filled.Print, contentDescription = null) },
                 enabled = ready,
                 onClick = {
@@ -566,7 +623,7 @@ private fun ReaderOverflowMenu(
                 }
             )
             DropdownMenuItem(
-                text = { Text("Share document") },
+                text = { Text(stringResource(R.string.reader_share_document)) },
                 leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
                 enabled = ready,
                 onClick = {
@@ -575,7 +632,7 @@ private fun ReaderOverflowMenu(
                 }
             )
             DropdownMenuItem(
-                text = { Text("Details") },
+                text = { Text(stringResource(R.string.reader_details)) },
                 leadingIcon = { Icon(Icons.Filled.Info, contentDescription = null) },
                 enabled = ready,
                 onClick = {
@@ -585,7 +642,7 @@ private fun ReaderOverflowMenu(
             )
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text("Settings") },
+                text = { Text(stringResource(R.string.action_settings)) },
                 leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
                 onClick = { expanded = false; onOpenSettings() }
             )
@@ -615,14 +672,14 @@ private fun ReaderBottomBar(
         BottomAppBar {
             if (ui.layout == PageLayout.SINGLE_PAGE) {
                 IconButton(onClick = onPrev, enabled = ui.currentPage > 0) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Previous page")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.reader_previous_page))
                 }
             } else {
                 // Continuous scroll: page turning is done by scrolling, so the
                 // side slots hold always-visible zoom controls (pinch and
                 // double-tap zoom keep working too).
                 IconButton(onClick = onZoomOut, enabled = ui.userScale > 0.55f) {
-                    Icon(Icons.Filled.ZoomOut, contentDescription = "Zoom out")
+                    Icon(Icons.Filled.ZoomOut, contentDescription = stringResource(R.string.reader_zoom_out))
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -636,11 +693,11 @@ private fun ReaderBottomBar(
             Spacer(Modifier.weight(1f))
             if (ui.layout == PageLayout.SINGLE_PAGE) {
                 IconButton(onClick = onNext, enabled = ui.currentPage < ui.pageCount - 1) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next page")
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.reader_next_page))
                 }
             } else {
                 IconButton(onClick = onZoomIn, enabled = ui.userScale < 4.95f) {
-                    Icon(Icons.Filled.ZoomIn, contentDescription = "Zoom in")
+                    Icon(Icons.Filled.ZoomIn, contentDescription = stringResource(R.string.reader_zoom_in))
                 }
             }
         }
@@ -914,52 +971,54 @@ private fun JumpToPageDialog(
     onConfirm: (Int) -> Unit
 ) {
     var text by remember(currentPage) { mutableStateOf((currentPage + 1).toString()) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var invalid by remember(currentPage) { mutableStateOf(false) }
+
+    fun submit() {
+        val page = text.toIntOrNull()
+        if (page == null || page !in 1..pageCount) {
+            invalid = true
+        } else {
+            onConfirm(page - 1)
+        }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Go to page") },
+        title = { Text(stringResource(R.string.reader_goto_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Page 1–$pageCount", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(R.string.reader_goto_range, pageCount),
+                    style = MaterialTheme.typography.bodyMedium
+                )
                 OutlinedTextField(
                     value = text,
                     onValueChange = {
                         text = it.filter { c -> c.isDigit() }.take(6)
-                        error = null
+                        invalid = false
                     },
-                    label = { Text("Page number") },
+                    label = { Text(stringResource(R.string.reader_goto_label)) },
                     singleLine = true,
-                    isError = error != null,
-                    supportingText = error?.let { { Text(it) } },
+                    isError = invalid,
+                    supportingText = if (invalid) {
+                        { Text(stringResource(R.string.reader_goto_invalid, pageCount)) }
+                    } else {
+                        null
+                    },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number,
                         imeAction = ImeAction.Done
                     ),
                     keyboardActions = KeyboardActions(
-                        onDone = {
-                            val page = text.toIntOrNull()
-                            if (page == null || page !in 1..pageCount) {
-                                error = "Enter a number between 1 and $pageCount."
-                            } else {
-                                onConfirm(page - 1)
-                            }
-                        }
+                        onDone = { submit() }
                     )
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                val page = text.toIntOrNull()
-                if (page == null || page !in 1..pageCount) {
-                    error = "Enter a number between 1 and $pageCount."
-                } else {
-                    onConfirm(page - 1)
-                }
-            }) { Text("Go") }
+            TextButton(onClick = ::submit) { Text(stringResource(R.string.reader_goto_go)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }
@@ -981,7 +1040,7 @@ private fun PageTextSheet(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            "Page $pageOneBased of $pageCount — text",
+            stringResource(R.string.reader_page_text_title, pageOneBased, pageCount),
             style = MaterialTheme.typography.titleMedium
         )
         when {
@@ -992,7 +1051,7 @@ private fun PageTextSheet(
             }
             text.isBlank() -> {
                 Text(
-                    "No extractable text on this page. It may be a scanned image — the page still displays normally above.",
+                    stringResource(R.string.reader_page_text_empty),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1005,19 +1064,19 @@ private fun PageTextSheet(
                     OutlinedButton(onClick = { copyText(context, text) }) {
                         Icon(Icons.Filled.ContentCopy, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Copy")
+                        Text(stringResource(R.string.reader_copy))
                     }
                     OutlinedButton(onClick = { shareText(context, text) }) {
                         Icon(Icons.Filled.Share, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Share")
+                        Text(stringResource(R.string.reader_share))
                     }
                 }
             }
         }
         if (links.isNotEmpty()) {
             HorizontalDivider()
-            Text("Links on this page", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.reader_links_title), style = MaterialTheme.typography.titleSmall)
             links.forEach { link ->
                 TextButton(onClick = { openLink(context, link.uri) }) {
                     Icon(Icons.Filled.Link, contentDescription = null)
@@ -1036,7 +1095,7 @@ private fun PageTextSheet(
 private fun copyText(context: Context, text: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     clipboard.setPrimaryClip(ClipData.newPlainText("PDF text", text))
-    Toast.makeText(context, "Text copied", Toast.LENGTH_SHORT).show()
+    Toast.makeText(context, context.getString(R.string.reader_copied), Toast.LENGTH_SHORT).show()
 }
 
 private fun shareText(context: Context, text: String) {
@@ -1045,7 +1104,7 @@ private fun shareText(context: Context, text: String) {
         putExtra(Intent.EXTRA_TEXT, text)
     }
     runCatching {
-        context.startActivity(Intent.createChooser(intent, "Share text"))
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.reader_share_text_title)))
     }
 }
 
@@ -1055,7 +1114,7 @@ private fun openLink(context: Context, uri: String) {
     }
     val ok = runCatching { context.startActivity(intent); true }.getOrDefault(false)
     if (!ok) {
-        Toast.makeText(context, "No app can open this link.", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.reader_no_app_for_link), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -1116,7 +1175,7 @@ private fun sharePdf(context: Context, uriString: String) {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     runCatching {
-        context.startActivity(Intent.createChooser(intent, "Share PDF"))
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.reader_share_pdf_title)))
     }
 }
 
@@ -1125,30 +1184,37 @@ private fun DocumentDetailsDialog(
     entry: com.enderbk.materialreader.data.DocumentEntry,
     currentPage: Int,
     pageCount: Int,
+    appearance: String,
+    appTheme: String,
+    nightToggle: String,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Details") },
+        title = { Text(stringResource(R.string.reader_details)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DetailRow("Name", entry.displayName)
-                DetailRow(
-                    "Size",
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+                DetailRow(stringResource(R.string.reader_details_name), entry.displayName)
+                DetailRow(stringResource(R.string.reader_details_size),
                     com.enderbk.materialreader.util.formatBytes(entry.sizeBytes)
                 )
                 if (pageCount > 0) {
-                    DetailRow("Pages", pageCount.toString())
-                    DetailRow(
-                        "Position",
+                    DetailRow(stringResource(R.string.reader_details_pages), pageCount.toString())
+                    DetailRow(stringResource(R.string.reader_details_position),
                         formatPageIndicator(currentPage + 1, pageCount)
                     )
                 }
-                DetailRow("Folder", entry.folder ?: "All")
+                DetailRow(stringResource(R.string.reader_details_folder), entry.folder ?: stringResource(R.string.folder_all))
+                DetailRow(stringResource(R.string.reader_details_appearance), appearance)
+                DetailRow(stringResource(R.string.reader_details_theme), appTheme)
+                DetailRow(stringResource(R.string.reader_details_night), nightToggle)
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
         }
     )
 }
@@ -1172,6 +1238,7 @@ private fun DetailRow(label: String, value: String) {
 @Composable
 private fun QuickSettingsSheet(
     settings: AppSettings,
+    nightAvailable: Boolean,
     onThemeMode: (ThemeMode) -> Unit,
     onNightMode: (Boolean) -> Unit,
     onKeepAwake: (Boolean) -> Unit,
@@ -1185,41 +1252,46 @@ private fun QuickSettingsSheet(
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
-            "Quick settings",
+            stringResource(R.string.reader_quick_title),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(bottom = 8.dp)
         )
         PreferenceGroup {
             SegmentedPreferenceRow(
-                title = "Theme",
+                title = stringResource(R.string.settings_theme),
                 options = listOf(
-                    ThemeMode.SYSTEM to "System",
-                    ThemeMode.LIGHT to "Light",
-                    ThemeMode.DARK to "Dark"
+                    ThemeMode.SYSTEM to stringResource(R.string.settings_theme_system),
+                    ThemeMode.LIGHT to stringResource(R.string.settings_theme_light),
+                    ThemeMode.DARK to stringResource(R.string.settings_theme_dark)
                 ),
                 selected = settings.themeMode,
                 onSelect = onThemeMode,
                 position = RowPosition.TOP
             )
             SwitchPreferenceRow(
-                title = "Night mode",
-                subtitle = "Invert page colors for reading in the dark",
-                checked = settings.nightMode,
+                title = stringResource(R.string.reader_night_mode),
+                subtitle = if (nightAvailable) {
+                    stringResource(R.string.settings_night_sub)
+                } else {
+                    stringResource(R.string.settings_night_unavailable)
+                },
+                checked = settings.nightMode && nightAvailable,
                 onCheckedChange = onNightMode,
-                position = RowPosition.MIDDLE
+                position = RowPosition.MIDDLE,
+                enabled = nightAvailable
             )
             SwitchPreferenceRow(
-                title = "Keep screen awake",
-                subtitle = "Prevent the display from sleeping",
+                title = stringResource(R.string.settings_keep_awake),
+                subtitle = stringResource(R.string.settings_keep_awake_sub),
                 checked = settings.keepScreenAwake,
                 onCheckedChange = onKeepAwake,
                 position = RowPosition.MIDDLE
             )
             SegmentedPreferenceRow(
-                title = "Reader background",
+                title = stringResource(R.string.settings_background),
                 options = listOf(
-                    ReaderBackground.DEFAULT to "Default",
-                    ReaderBackground.DIM to "Dim"
+                    ReaderBackground.DEFAULT to stringResource(R.string.settings_background_default),
+                    ReaderBackground.DIM to stringResource(R.string.settings_background_dim)
                 ),
                 selected = settings.readerBackground,
                 onSelect = onReaderBackground,

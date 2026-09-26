@@ -14,15 +14,30 @@ android {
         applicationId "com.enderbk.materialreader"
         minSdk 24
         targetSdk 37
-        versionCode 1
-        versionName "1.0.0"
+        versionCode 7
+        versionName "1.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    def keystoreProperties = new Properties()
+    def keystorePropertiesFile = rootProject.file("keystore.properties")
+    if (keystorePropertiesFile.exists()) {
+        keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(keystoreProperties['storeFile'] ?: "missing.keystore")
+            storePassword keystoreProperties['storePassword']
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -49,8 +64,9 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     androidTestImplementation(platform("androidx.compose:compose-bom:2026.09.00"))
 
-    // Core / Activity / Lifecycle
+    // Core / Activity / Lifecycle (appcompat backports per-app locales pre-33)
     implementation 'androidx.core:core-ktx:1.19.1'
+    implementation 'androidx.appcompat:appcompat:1.8.0'
     implementation 'androidx.activity:activity-compose:1.13.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.11.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.11.0'

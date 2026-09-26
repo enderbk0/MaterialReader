@@ -229,3 +229,42 @@ fun classifyDocumentPage(
     // B/C/D: invert everything, then paint pictures back dimmed (not bright).
     return NightRegions(merged, NightPageMode.INVERT_WITH_DIMMED_IMAGES)
 }
+
+/**
+ * Mean luminance (0..1) of opaque pixels, skipping transparent ones (a
+ * transparent margin is not page content — it shows the reader background
+ * through). Returns null when too few opaque pixels exist to judge.
+ * Pure function over ARGB ints — JVM unit-testable.
+ */
+fun luminanceOf(pixels: IntArray): Float? {
+    var sum = 0.0
+    var count = 0
+    for (pixel in pixels) {
+        if ((pixel ushr 24) < 128) continue
+        val r = (pixel shr 16) and 0xFF
+        val g = (pixel shr 8) and 0xFF
+        val b = pixel and 0xFF
+        sum += (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
+        count++
+    }
+    if (count < 100) return null
+    return (sum / count).toFloat()
+}
+
+/** Below this border luminance the page already counts as dark. */
+const val DARK_BACKGROUND_LUMINANCE = 0.4f
+
+/**
+ * A PDF that is already dark must not be inverted (that would blast it
+ * bright): text and photo pages alike take the dim path instead, which only
+ * darkens further. Null (unknown) keeps the signal decision untouched.
+ */
+fun adjustForBackground(mode: NightPageMode, backgroundLuminance: Float?): NightPageMode {
+    if (backgroundLuminance == null) return mode
+    if (backgroundLuminance >= DARK_BACKGROUND_LUMINANCE) return mode
+    return when (mode) {
+        NightPageMode.INVERT_ALL -> NightPageMode.DIM
+        NightPageMode.INVERT_WITH_DIMMED_IMAGES -> NightPageMode.DIM
+        NightPageMode.DIM -> NightPageMode.DIM
+    }
+}

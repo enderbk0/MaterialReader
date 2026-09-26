@@ -88,6 +88,13 @@ class PdfSession private constructor(
                 val scale = width.toFloat() / page.width.toFloat()
                 val height = (page.height * scale).toInt().coerceAtLeast(1)
                 val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                // Transparent PDFs are far more common than expected, and
+                // PdfRenderer composites page content OVER the bitmap without
+                // clearing it: a fresh bitmap is transparent black, so such
+                // pages would show the (dark) reader background through as
+                // their "paper". Every mainstream reader flattens onto white;
+                // the framework docs put initialization on the caller.
+                bmp.eraseColor(android.graphics.Color.WHITE)
                 page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                 bmp
             }
@@ -115,7 +122,10 @@ class PdfSession private constructor(
             }
             val base = renderPage(index, width)
             val regions = pageNightRegions(index)
-            val out = when (regions.mode) {
+            // A PDF that is already dark (dark background by design, dark
+            // scan) must not be inverted bright: dim it instead.
+            val mode = adjustForBackground(regions.mode, backgroundLuminance(base))
+            val out = when (mode) {
                 NightPageMode.INVERT_ALL -> applyMatrix(base, nightModeMatrix().values)
                 NightPageMode.DIM -> applyMatrix(base, dimMatrixValues())
                 // Invert everything (text goes white), then paint the picture
@@ -172,6 +182,37 @@ class PdfSession private constructor(
 
     companion object {
         /**
+         * Border-band luminance of a rendered page: samples the margins
+         * (where page background lives, not content) with a stride that caps
+         * the work at a few thousand pixels. Transparent pixels are skipped
+         * by [luminanceOf] — they show the reader background, not the PDF.
+         */
+        fun backgroundLuminance(src: Bitmap): Float? {
+            val w = src.width
+            val h = src.height
+            if (w <= 0 || h <= 0) return null
+            val bandX = (w * 0.08f).toInt().coerceAtLeast(1)
+            val bandY = (h * 0.06f).toInt().coerceAtLeast(1)
+            val stride = kotlin.math.sqrt((w * h) / 3000.0).toInt().coerceAtLeast(1)
+            val pixels = ArrayList<Int>(4096)
+            var y = 0
+            while (y < h) {
+                val edgeRow = y < bandY || y >= h - bandY
+                var x = 0
+                while (x < w) {
+                    val edgeCol = x < bandX || x >= w - bandX
+                    if (edgeRow || edgeCol) {
+                        pixels.add(src.getPixel(x, y))
+                    }
+                    x += stride
+                }
+                y += stride
+            }
+            if (pixels.isEmpty()) return null
+            return luminanceOf(pixels.toIntArray())
+        }
+
+        /**
          * Draws [src] through a color matrix into a new bitmap. Used for
          * whole-page night transforms (invert / dim).
          */
@@ -187,8 +228,7 @@ class PdfSession private constructor(
         /**
          * Overlays [src] regions onto [dst] (both same dimensions): used to
          * paint dimmed picture regions back over an inverted page.
-         */
-        fun compositeRegions(dst: Bitmap, src: Bitmap, rects: List<ImgRect>): Bitmap {
+         */        fun compositeRegions(dst: Bitmap, src: Bitmap, rects: List<ImgRect>): Bitmap {
             if (rects.isEmpty()) return dst
             val canvas = Canvas(dst)
             val paint = Paint().apply { isFilterBitmap = true }

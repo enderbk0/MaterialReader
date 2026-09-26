@@ -22,11 +22,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
+import com.enderbk.materialreader.R
+import com.enderbk.materialreader.pdf.nightModeMatrix
 import kotlinx.coroutines.delay
 
 /**
@@ -68,13 +73,26 @@ fun PdfPageItem(
     // placeholders so zoom looked broken. The previous bitmap stays visible
     // (stretched) until the settled width finishes rendering.
     var bitmap by remember(index) { mutableStateOf<Bitmap?>(null) }
+
+    /**
+     * Whether the bitmap on screen came from the night render path.
+     * Toggling night mode must respond INSTANTLY even though analyzed night
+     * renders take a while (document analysis runs once per page on IO):
+     * while the shown bitmap and the requested mode disagree, a GPU invert
+     * stands in — double inversion when turning off restores the original
+     * look. The analyzed bitmap then swaps in and the filter lifts.
+     */
+    var showingNight by remember(index) { mutableStateOf(false) }
     var pan by remember(index) { mutableStateOf(Offset.Zero) }
 
     LaunchedEffect(index, renderWidthPx, night) {
         // Settle debounce: coalesce rapid width changes from an active pinch
         // into a single render instead of queueing one per frame.
         delay(120)
-        render(index, renderWidthPx)?.let { bitmap = it }
+        render(index, renderWidthPx)?.let {
+            bitmap = it
+            showingNight = night
+        }
     }
 
     // Snap back to centered when zooming all the way out.
@@ -135,9 +153,17 @@ fun PdfPageItem(
             if (bmp != null && !bmp.isRecycled) {
                 Image(
                     bitmap = bmp.asImageBitmap(),
-                    contentDescription = "Page ${index + 1} of $pageCount",
+                    contentDescription = stringResource(
+                        com.enderbk.materialreader.R.string.reader_page_description,
+                        index + 1,
+                        pageCount
+                    ),
                     modifier = Modifier.fillMaxSize(),
-
+                    colorFilter = if (needsInstantInvert(night, showingNight)) {
+                        remember { instantNightFilter() }
+                    } else {
+                        null
+                    }
                 )
             } else {
                 Box(
@@ -152,3 +178,15 @@ fun PdfPageItem(
         }
     }
 }
+
+/**
+ * Whether a stand-in GPU invert is needed: exactly when the requested mode
+ * disagrees with what is on screen (night requested but showing a normal
+ * bitmap, or vice versa after turning night off). Pure rule, unit-tested.
+ */
+internal fun needsInstantInvert(night: Boolean, showingNight: Boolean): Boolean =
+    night != showingNight
+
+/** Full-page GPU invert used only as an instant stand-in (see above). */
+internal fun instantNightFilter(): ColorFilter =
+    ColorFilter.colorMatrix(ColorMatrix(nightModeMatrix().values))

@@ -12,3 +12,7 @@ local.properties
 .studio/
 *.apk
 *.aab
+
+# Release signing (never commit the real key or passwords)
+/materialreader-release.keystore
+/keystore.properties

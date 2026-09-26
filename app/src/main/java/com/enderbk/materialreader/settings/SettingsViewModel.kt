@@ -29,6 +29,17 @@ class SettingsViewModel(private val settings: SettingsStore) : ViewModel() {
     fun setRememberPosition(enabled: Boolean) = edit { it.copy(rememberReadingPosition = enabled) }
     fun setReaderBackground(background: ReaderBackground) = edit { it.copy(readerBackground = background) }
     fun setNightMode(enabled: Boolean) = edit { it.copy(nightMode = enabled) }
+    fun setRoundedFont(enabled: Boolean) = edit { it.copy(roundedFont = enabled) }
+    fun setAppLanguage(tag: String) = edit { it.copy(appLanguage = tag) }
+
+    /**
+     * Suspending write for flows that must persist BEFORE acting on the
+     * value (e.g. applying a locale that recreates the activity on read).
+     */
+    suspend fun setAppLanguageSync(tag: String) {
+        settings.update { it.copy(appLanguage = tag) }
+    }
+    fun setWelcomeSeen() = edit { it.copy(welcomeSeen = true) }
     fun setExperimentalEnabled(enabled: Boolean) = edit { it.copy(experimentalEnabled = enabled) }
     fun setFloatingNavBar(enabled: Boolean) = edit { it.copy(floatingNavBar = enabled) }
 }

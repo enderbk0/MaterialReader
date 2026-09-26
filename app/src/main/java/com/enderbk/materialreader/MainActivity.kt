@@ -1,5 +1,6 @@
 package com.enderbk.materialreader
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -14,6 +15,8 @@ import com.enderbk.materialreader.data.DataStoreSettingsStore
 import com.enderbk.materialreader.library.SystemDocumentMetaSource
 import com.enderbk.materialreader.navigation.MaterialReaderApp
 import com.enderbk.materialreader.pdf.SystemReaderBackend
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 class MainActivity : ComponentActivity() {
 
@@ -25,8 +28,23 @@ class MainActivity : ComponentActivity() {
     /** Content URI shared/opened into the app, consumed once by the nav host. */
     private var externalUri by mutableStateOf<String?>(null)
 
+    override fun attachBaseContext(newBase: Context?) {
+        // Pre-33 reliability: AppCompat's locale backport does not always
+        // re-wrap a plain ComponentActivity, so the stored locale is applied
+        // to the base context as well. Blank (system default) passes through.
+        val base = newBase ?: return super.attachBaseContext(newBase)
+        super.attachBaseContext(wrapForLanguage(base))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Apply the stored per-app language before any UI exists. A single
+        // blocking DataStore read (memory-cached after first load) so the
+        // first frame already uses the right locale. Empty = system default.
+        val languageTag = runCatching {
+            runBlocking { settings.settings.first().appLanguage }
+        }.getOrDefault("")
+        com.enderbk.materialreader.util.applyAppLanguage(this, languageTag)
         if (savedInstanceState == null) {
             externalUri = intent.extractPdfUri()?.toString()
         }
@@ -83,5 +101,27 @@ class MainActivity : ComponentActivity() {
         // report a readable error if it is not a PDF.
         if (type == null) return true
         return false
+    }
+
+    companion object {
+        /**
+         * Wraps [base] with the stored per-app language, or returns it
+         * untouched for system default. Used by [attachBaseContext] so the
+         * locale holds on every API level.
+         */
+        fun wrapForLanguage(base: Context): Context {
+            val tag = runCatching {
+                kotlinx.coroutines.runBlocking {
+                    DataStoreSettingsStore(base)
+                        .settings
+                        .first()
+                        .appLanguage
+                }
+            }.getOrDefault("")
+            if (tag.isBlank()) return base
+            val config = android.content.res.Configuration(base.resources.configuration)
+            config.setLocale(java.util.Locale.forLanguageTag(tag))
+            return base.createConfigurationContext(config)
+        }
     }
 }

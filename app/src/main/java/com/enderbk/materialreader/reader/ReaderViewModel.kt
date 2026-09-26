@@ -11,6 +11,7 @@ import com.enderbk.materialreader.data.PageLayout
 import com.enderbk.materialreader.data.SettingsStore
 import com.enderbk.materialreader.data.ZoomMode
 import com.enderbk.materialreader.pdf.PageLink
+import com.enderbk.materialreader.pdf.NightPageMode
 import com.enderbk.materialreader.pdf.PdfOpenException
 import com.enderbk.materialreader.pdf.PdfOpenFailure
 import com.enderbk.materialreader.pdf.PdfDocument
@@ -183,6 +184,12 @@ class ReaderViewModel(
     suspend fun renderNightPage(index: Int, widthPx: Int): Bitmap? {
         val d = document ?: return null
         return runCatching { backend.renderNightPage(d, index, widthPx) }.getOrNull()
+    }
+
+    /** Classification used for [index], or null when the document is not open. */
+    suspend fun pageNightMode(index: Int): NightPageMode? {
+        val d = document ?: return null
+        return runCatching { backend.pageMode(d, index) }.getOrNull()
     }
 
     fun pageAspectPoints(index: Int): Float? {

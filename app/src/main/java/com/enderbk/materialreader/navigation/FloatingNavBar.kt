@@ -30,6 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.enderbk.materialreader.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,13 +65,13 @@ fun FloatingNavBar(
                 selected = currentRoute == Routes.LIBRARY,
                 onClick = onLibrary,
                 icon = Icons.Filled.History,
-                label = "Library"
+                label = stringResource(R.string.nav_library)
             )
             FloatingDestination(
                 selected = currentRoute == Routes.SETTINGS,
                 onClick = onSettings,
                 icon = Icons.Filled.Settings,
-                label = "Settings"
+                label = stringResource(R.string.nav_settings)
             )
         }
     }
@@ -112,7 +114,7 @@ private fun RowScope.FloatingDestination(
         modifier = Modifier
             .clip(CircleShape)
             .background(background)
-            .clickable(role = Role.Button, onClickLabel = "Open $label", onClick = onClick)
+            .clickable(role = Role.Button, onClickLabel = if (label == stringResource(R.string.nav_library)) stringResource(R.string.nav_open_library) else stringResource(R.string.nav_open_settings), onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)

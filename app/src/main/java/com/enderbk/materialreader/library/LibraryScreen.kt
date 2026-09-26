@@ -67,6 +67,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.TextButton
 import com.enderbk.materialreader.ui.BleedTopBar
+import com.enderbk.materialreader.ui.BottomBleedOverlay
 import com.enderbk.materialreader.ui.TopBleedOverlay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -85,6 +86,8 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
+import com.enderbk.materialreader.R
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.enderbk.materialreader.data.DocumentEntry
@@ -214,7 +217,7 @@ fun LibraryScreen(
                     ) {
                         if (state.pinned.isNotEmpty()) {
                             item(key = "header-pinned") {
-                                SectionHeader("Pinned")
+                                SectionHeader(stringResource(R.string.section_pinned))
                             }
                             items(state.pinned, key = { "p-${it.id}" }) { entry ->
                                 DocumentRow(
@@ -232,7 +235,13 @@ fun LibraryScreen(
                         }
                         if (state.recent.isNotEmpty()) {
                             item(key = "header-recent") {
-                                SectionHeader(if (state.pinned.isEmpty()) "Recent" else "All documents")
+                                SectionHeader(
+                            if (state.pinned.isEmpty()) {
+                                stringResource(R.string.section_recent)
+                            } else {
+                                stringResource(R.string.section_all_documents)
+                            }
+                        )
                             }
                             items(state.recent, key = { "r-${it.id}" }) { entry ->
                                 DocumentRow(
@@ -250,8 +259,9 @@ fun LibraryScreen(
                         }
                     }
                 }
-                TopBleedOverlay()
             }
+            TopBleedOverlay()
+            BottomBleedOverlay(modifier = Modifier.align(Alignment.BottomCenter))
         }
     }
 
@@ -291,23 +301,40 @@ private fun LibraryTopBar(
     onSortChange: (SortOrder) -> Unit
 ) {
     BleedTopBar(
-        title = { Text(if (searchActive) "Search PDFs" else "MaterialReader") },
+        title = {
+            Text(
+                if (searchActive) {
+                    stringResource(R.string.library_search_title)
+                } else {
+                    stringResource(R.string.library_title)
+                }
+            )
+        },
         navigationIcon = {
             if (searchActive) {
                 IconButton(onClick = onCloseSearch) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search")
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.action_back)
+                    )
                 }
             }
         },
         actions = {
             if (!searchActive) {
                 IconButton(onClick = onOpenSearch, enabled = !libraryEmpty) {
-                    Icon(Icons.Filled.Search, contentDescription = "Search PDFs")
+                    Icon(
+                        Icons.Filled.Search,
+                        contentDescription = stringResource(R.string.desc_search_pdfs)
+                    )
                 }
                 SortMenu(current = sortOrder, onSelect = onSortChange)
             } else if (query.isNotEmpty()) {
                 IconButton(onClick = onClearQuery) {
-                    Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = stringResource(R.string.desc_clear_search)
+                    )
                 }
             }
         }
@@ -337,12 +364,15 @@ private fun LibrarySearchField(
         value = query,
         onValueChange = onQueryChange,
         modifier = modifier.focusRequester(focusRequester),
-        placeholder = { Text("Search by filename") },
+        placeholder = { Text(stringResource(R.string.library_search_hint)) },
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
             if (query.isNotEmpty()) {
                 IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = stringResource(R.string.desc_clear_search)
+                    )
                 }
             }
         },
@@ -358,7 +388,10 @@ private fun SortMenu(current: SortOrder, onSelect: (SortOrder) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
-            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort documents")
+            Icon(
+                Icons.AutoMirrored.Filled.Sort,
+                contentDescription = stringResource(R.string.desc_sort)
+            )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             SortOrder.entries.forEach { order ->
@@ -366,9 +399,9 @@ private fun SortMenu(current: SortOrder, onSelect: (SortOrder) -> Unit) {
                     text = {
                         Text(
                             when (order) {
-                                SortOrder.RECENT -> "Most recent"
-                                SortOrder.NAME -> "Name"
-                                SortOrder.SIZE -> "Size"
+                                SortOrder.RECENT -> stringResource(R.string.sort_recent)
+                                SortOrder.NAME -> stringResource(R.string.sort_name)
+                                SortOrder.SIZE -> stringResource(R.string.sort_size)
                             } + if (order == current) " ✓" else ""
                         )
                     },
@@ -393,7 +426,7 @@ private fun DocumentRow(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val metaLine = buildString {
-        if (entry.missing) append("Missing file")
+        if (entry.missing) append(stringResource(R.string.library_missing_file))
         entry.pageCount?.let {
             if (isNotEmpty()) append(" • ")
             append("$it pages")
@@ -446,11 +479,25 @@ private fun DocumentRow(
         trailingContent = {
             Box {
                 IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "Options for ${entry.displayName}")
+                    Icon(
+                        Icons.Filled.MoreVert,
+                        contentDescription = stringResource(
+                            R.string.desc_document_options,
+                            entry.displayName
+                        )
+                    )
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(
-                        text = { Text(if (entry.pinned) "Unpin" else "Pin") },
+                        text = {
+                            Text(
+                                if (entry.pinned) {
+                                    stringResource(R.string.action_unpin)
+                                } else {
+                                    stringResource(R.string.action_pin)
+                                }
+                            )
+                        },
                         leadingIcon = {
                             Icon(
                                 if (entry.pinned) Icons.Filled.Star else Icons.Filled.StarBorder,
@@ -464,7 +511,7 @@ private fun DocumentRow(
                     )
                     if (entry.missing) {
                         DropdownMenuItem(
-                            text = { Text("Find file again") },
+                            text = { Text(stringResource(R.string.action_find_file_again)) },
                             leadingIcon = {
                                 Icon(Icons.Filled.FolderOpen, contentDescription = null)
                             },
@@ -476,7 +523,7 @@ private fun DocumentRow(
                     }
                     if (!entry.missing) {
                         DropdownMenuItem(
-                            text = { Text("Move to folder") },
+                            text = { Text(stringResource(R.string.action_move_to_folder)) },
                         leadingIcon = {
                             Icon(Icons.Filled.Folder, contentDescription = null)
                         },
@@ -487,7 +534,7 @@ private fun DocumentRow(
                     )
                     }
                     DropdownMenuItem(
-                        text = { Text("Remove from library") },
+                        text = { Text(stringResource(R.string.action_remove_from_library)) },
                         onClick = {
                             menuOpen = false
                             onRemove()
@@ -518,10 +565,13 @@ private fun LibraryEmptyState(onOpenPdf: () -> Unit, modifier: Modifier = Modifi
             )
         }
         Spacer(Modifier.height(20.dp))
-        Text("No PDFs yet", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            stringResource(R.string.library_empty_title),
+            style = MaterialTheme.typography.headlineSmall
+        )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Open a PDF to start reading. Your files stay on this device — nothing is uploaded, ever.",
+            stringResource(R.string.library_empty_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -529,7 +579,7 @@ private fun LibraryEmptyState(onOpenPdf: () -> Unit, modifier: Modifier = Modifi
         androidx.compose.material3.Button(onClick = onOpenPdf) {
             Icon(Icons.Filled.FolderOpen, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("Open PDF")
+            Text(stringResource(R.string.library_open_pdf))
         }
     }
 }
@@ -550,7 +600,7 @@ private fun NoSearchResults(query: String, onClear: () -> Unit, modifier: Modifi
         Spacer(Modifier.height(16.dp))
         Text("No matches for \"$query\"", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
-        TextButton(onClick = onClear) { Text("Clear search") }
+        TextButton(onClick = onClear) { Text(stringResource(R.string.library_clear_search)) }
     }
 }
 
@@ -570,7 +620,7 @@ private fun FolderChipsRow(
             FilterChip(
                 selected = selected == null,
                 onClick = { onSelect(null) },
-                label = { Text("All") }
+                label = { Text(stringResource(R.string.folder_all)) }
             )
         }
         items(folders, key = { "folder-$it" }) { folder ->
@@ -595,7 +645,7 @@ private fun MoveToFolderDialog(
     var newName by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Move to folder") },
+        title = { Text(stringResource(R.string.move_to_folder_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -606,7 +656,7 @@ private fun MoveToFolderDialog(
                     overflow = TextOverflow.Ellipsis
                 )
                 FolderRadioRow(
-                    label = "No folder (All)",
+                    label = stringResource(R.string.move_to_folder_none),
                     selected = selected == null && newName.isBlank(),
                     onClick = {
                         selected = null
@@ -627,14 +677,14 @@ private fun MoveToFolderDialog(
                 OutlinedTextField(
                     value = newName,
                     onValueChange = { newName = it.take(48) },
-                    label = { Text("New folder…") },
+                    label = { Text(stringResource(R.string.move_to_folder_new_hint)) },
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp)
                 )
                 Text(
-                    "Folders are created by naming them. Empty folders disappear automatically.",
+                    stringResource(R.string.move_to_folder_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -642,11 +692,11 @@ private fun MoveToFolderDialog(
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(if (newName.isNotBlank()) newName else selected) }) {
-                Text("Move")
+                Text(stringResource(R.string.move_to_folder_confirm))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }
@@ -676,7 +726,7 @@ private fun FolderRadioRow(
         )
         if (onDelete != null) {
             IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, contentDescription = "Delete folder $label")
+                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.desc_delete_folder, label))
             }
         } else {
             Spacer(Modifier.width(48.dp))
@@ -719,12 +769,12 @@ private fun FabMenu(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 FabActionRow(
-                    label = "New folder",
+                    label = stringResource(R.string.fab_new_folder),
                     onClick = onNewFolder,
                     icon = { Icon(Icons.Filled.CreateNewFolder, contentDescription = null) }
                 )
                 FabActionRow(
-                    label = "Open PDF",
+                    label = stringResource(R.string.library_open_pdf),
                     onClick = onOpenPdf,
                     icon = { Icon(Icons.Filled.PictureAsPdf, contentDescription = null) }
                 )
@@ -778,18 +828,18 @@ private fun NewFolderDialog(
     var name by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New folder") },
+        title = { Text(stringResource(R.string.new_folder_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.take(48) },
-                    label = { Text("Folder name") },
+                    label = { Text(stringResource(R.string.new_folder_name_hint)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    "Move PDFs into it from a document's ⋮ menu.",
+                    stringResource(R.string.new_folder_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -800,12 +850,16 @@ private fun NewFolderDialog(
                 enabled = name.isNotBlank(),
                 onClick = {
                     onConfirm(name.trim())
-                    Toast.makeText(context, "Folder \"${name.trim()}\" created", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.new_folder_created, name.trim()),
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
-            ) { Text("Create") }
+            ) { Text(stringResource(R.string.new_folder_create)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }

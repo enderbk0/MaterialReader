@@ -16,6 +16,8 @@ to most of them ships in [LICENSE](LICENSE).
 | AndroidX datastore-preferences (Google) | 1.2.1 | Apache-2.0 |
 | AndroidX core-ktx (Google) | 1.19.1 | Apache-2.0 |
 | PdfBox-Android, `com.tom-roush:pdfbox-android` (Tom Roush / Apache PDFBox port) | 2.0.27.0 | Apache-2.0 |
+| Nunito rounded typeface (Vernon Adams / Google Fonts, opt-in app font) | static 400/500/700 | OFL-1.1 (see app/src/main/assets/licenses/OFL-Nunito.txt) |
+| AndroidX appcompat (per-app language backport) | 1.8.0 | Apache-2.0 |
 | Bouncy Castle `bcprov/bcpkix/bcutil-jdk15to18` (transitive via PdfBox-Android) | 1.72 | Bouncy Castle licence (MIT-style) |
 | JUnit 4 (tests only) | 4.13.2 | EPL-1.0 |
 | AndroidX Test: ui-test-junit4, test-ext junit (instrumented tests only) | BOM / 1.3.0 | Apache-2.0 |

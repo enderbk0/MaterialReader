@@ -33,16 +33,17 @@ fun mapOpenError(error: Throwable): PdfOpenFailure {
     }
 }
 
-/** Plain-language message shown when a PDF cannot be opened. */
-fun PdfOpenFailure.userMessage(displayName: String): String = when (this) {
-    PdfOpenFailure.FileNotFound ->
-        "\"$displayName\" could not be found. It may have been moved, renamed, or deleted."
-    PdfOpenFailure.PasswordProtected ->
-        "\"$displayName\" is password protected. MaterialReader cannot open encrypted PDFs yet."
-    PdfOpenFailure.CorruptOrUnsupported ->
-        "\"$displayName\" could not be opened. The file may be damaged or use features this reader does not support yet."
-    PdfOpenFailure.PermissionLost ->
-        "MaterialReader no longer has permission to read \"$displayName\". Please open it again with \"Open PDF\"."
-    is PdfOpenFailure.Unknown ->
-        "\"$displayName\" could not be opened ($debugDetail)."
+/** String resource (with `%1$s` = display name, `%2$s` = detail) for each failure. */
+fun PdfOpenFailure.messageRes(): Int = when (this) {
+    PdfOpenFailure.FileNotFound -> com.enderbk.materialreader.R.string.reader_pdf_error_not_found
+    PdfOpenFailure.PasswordProtected -> com.enderbk.materialreader.R.string.reader_pdf_error_password
+    PdfOpenFailure.CorruptOrUnsupported -> com.enderbk.materialreader.R.string.reader_pdf_error_corrupt
+    PdfOpenFailure.PermissionLost -> com.enderbk.materialreader.R.string.reader_pdf_error_permission
+    is PdfOpenFailure.Unknown -> com.enderbk.materialreader.R.string.reader_pdf_error_unknown
+}
+
+/** Format arguments matching [messageRes]. */
+fun PdfOpenFailure.formatArgs(displayName: String): Array<out Any> = when (this) {
+    is PdfOpenFailure.Unknown -> arrayOf(displayName, debugDetail)
+    else -> arrayOf(displayName)
 }

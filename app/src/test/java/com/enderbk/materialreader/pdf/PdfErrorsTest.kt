@@ -32,9 +32,30 @@ class PdfErrorsTest {
     }
 
     @Test
-    fun messagesNameTheDocument() {
-        val message = PdfOpenFailure.FileNotFound.userMessage("Report.pdf")
-        assertTrue(message.contains("Report.pdf"))
+    fun failuresMapToMessageResources() {
+        assertEquals(
+            com.enderbk.materialreader.R.string.reader_pdf_error_not_found,
+            PdfOpenFailure.FileNotFound.messageRes()
+        )
+        assertEquals(
+            com.enderbk.materialreader.R.string.reader_pdf_error_password,
+            PdfOpenFailure.PasswordProtected.messageRes()
+        )
+        assertEquals(
+            com.enderbk.materialreader.R.string.reader_pdf_error_corrupt,
+            PdfOpenFailure.CorruptOrUnsupported.messageRes()
+        )
+        assertEquals(
+            com.enderbk.materialreader.R.string.reader_pdf_error_permission,
+            PdfOpenFailure.PermissionLost.messageRes()
+        )
+        assertEquals(
+            com.enderbk.materialreader.R.string.reader_pdf_error_unknown,
+            PdfOpenFailure.Unknown("boom").messageRes()
+        )
+        // Unknown carries the debug detail as a second format argument.
+        assertEquals(2, PdfOpenFailure.Unknown("boom").formatArgs("Report.pdf").size)
+        assertEquals("Report.pdf", PdfOpenFailure.Unknown("x").formatArgs("Report.pdf")[0])
     }
 
     @Test

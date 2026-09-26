@@ -6,6 +6,8 @@ import com.enderbk.materialreader.ui.theme.ReaderDarkDim
 import com.enderbk.materialreader.ui.theme.ReaderLightDefault
 import com.enderbk.materialreader.ui.theme.ReaderLightDim
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PdfAppearanceTest {
@@ -76,5 +78,17 @@ class PdfAppearanceTest {
             PdfAppearance(PdfRenderPath.NORMAL, ReaderDarkDim),
             resolvePdfAppearance(false, ReaderBackground.DIM, darkTheme = true)
         )
+    }
+
+    @Test
+    fun instantInvertOnlyWhileDisagreeing() {
+        // Night requested but normal bitmap showing (analyzed render pending).
+        assertTrue(needsInstantInvert(night = true, showingNight = false))
+        // Just turned off while the night bitmap is still up: double-invert
+        // restores the original look until the normal render lands.
+        assertTrue(needsInstantInvert(night = false, showingNight = true))
+        // Agreement in either direction: no stand-in filter.
+        assertFalse(needsInstantInvert(night = true, showingNight = true))
+        assertFalse(needsInstantInvert(night = false, showingNight = false))
     }
 }

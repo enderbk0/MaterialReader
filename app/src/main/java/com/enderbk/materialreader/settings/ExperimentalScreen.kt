@@ -33,7 +33,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.enderbk.materialreader.R
 import androidx.compose.foundation.LocalIndication
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.enderbk.materialreader.data.SettingsStore
@@ -56,10 +58,10 @@ fun ExperimentalScreen(
         modifier = modifier,
         topBar = {
             BleedTopBar(
-                title = { Text("Experimental") },
+                title = { Text(stringResource(R.string.experimental_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 }
             )
@@ -81,7 +83,7 @@ fun ExperimentalScreen(
             }
             item(key = "nav-header") {
                 Text(
-                    "Navigation",
+                    stringResource(R.string.experimental_nav),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 16.dp, bottom = 4.dp, start = 4.dp)
@@ -90,8 +92,8 @@ fun ExperimentalScreen(
             item(key = "nav-group") {
                 PreferenceGroup {
                     SwitchPreferenceRow(
-                        title = "Floating navigation bar",
-                        subtitle = "Pill-style bar instead of the bottom bar",
+                        title = stringResource(R.string.experimental_floating),
+                        subtitle = stringResource(R.string.experimental_floating_sub),
                         checked = state.floatingNavBar,
                         onCheckedChange = vm::setFloatingNavBar,
                         position = RowPosition.ALONE,
@@ -101,7 +103,7 @@ fun ExperimentalScreen(
             }
             item(key = "note") {
                 Text(
-                    "Experimental features may change or disappear in updates.",
+                    stringResource(R.string.experimental_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 12.dp, start = 4.dp, end = 4.dp)
@@ -153,7 +155,7 @@ private fun ExperimentalMasterPill(
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                "Experimental features",
+                stringResource(R.string.experimental_master),
                 style = MaterialTheme.typography.titleMedium,
                 color = if (on) {
                     MaterialTheme.colorScheme.onPrimary
@@ -162,14 +164,14 @@ private fun ExperimentalMasterPill(
                 }
             )
             Text(
-                if (on) "On" else "Off",
+                if (on) stringResource(R.string.experimental_on) else stringResource(R.string.experimental_off),
                 style = MaterialTheme.typography.bodySmall,
                 color = content
             )
         }
         Spacer(Modifier.width(16.dp))
         Text(
-            if (on) "ON" else "OFF",
+            if (on) stringResource(R.string.experimental_on_cap) else stringResource(R.string.experimental_off_cap),
             style = MaterialTheme.typography.labelLarge,
             color = content
         )

@@ -223,4 +223,58 @@ class NightRegionsTest {
         )
         assertEquals(NightPageMode.DIM, out.mode)
     }
+
+    @Test
+    fun luminanceSkipsTransparentAndAverages() {
+        // Opaque white.
+        assertEquals(
+            1f,
+            luminanceOf(
+                intArrayOf(0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
+                    .let { it + it + IntArray(200) { 0xFFFFFFFF.toInt() } }
+            ) ?: -1f,
+            0.01f
+        )
+        // Opaque black.
+        assertEquals(
+            0f,
+            luminanceOf(IntArray(200) { 0xFF000000.toInt() }) ?: -1f,
+            0.01f
+        )
+        // Fully transparent margins do not count as dark content.
+        assertEquals(null, luminanceOf(IntArray(5000) { 0x00000000 }))
+        // Mixed: white page with a black band still reads bright overall.
+        val mixed = IntArray(200) { i -> if (i < 20) 0xFF000000.toInt() else 0xFFFFFFFF.toInt() }
+        assertTrue((luminanceOf(mixed) ?: 0f) > 0.85f)
+    }
+
+    @Test
+    fun darkBackgroundPagesDimInsteadOfInvert() {
+        assertEquals(
+            NightPageMode.DIM,
+            adjustForBackground(NightPageMode.INVERT_ALL, 0.15f)
+        )
+        assertEquals(
+            NightPageMode.DIM,
+            adjustForBackground(NightPageMode.INVERT_WITH_DIMMED_IMAGES, 0.2f)
+        )
+        // Light pages and unknown backgrounds keep the signal decision.
+        assertEquals(
+            NightPageMode.INVERT_ALL,
+            adjustForBackground(NightPageMode.INVERT_ALL, 0.9f)
+        )
+        assertEquals(
+            NightPageMode.INVERT_WITH_DIMMED_IMAGES,
+            adjustForBackground(NightPageMode.INVERT_WITH_DIMMED_IMAGES, null)
+        )
+        // Boundary: 0.4 counts as dark.
+        assertEquals(
+            NightPageMode.DIM,
+            adjustForBackground(NightPageMode.INVERT_ALL, 0.39f)
+        )
+        assertEquals(
+            NightPageMode.INVERT_ALL,
+            adjustForBackground(NightPageMode.INVERT_ALL, 0.41f)
+        )
+    }
 }

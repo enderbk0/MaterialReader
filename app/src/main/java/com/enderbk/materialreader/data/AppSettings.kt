@@ -29,6 +29,10 @@ data class AppSettings(
     /** Night mode inverts page colors (dark text becomes light) for dark environments. */
     val nightMode: Boolean = false,
     /** Master switch for experimental features (unlocked via the About easter egg). */
+    val roundedFont: Boolean = false,
+    /** ISO language tag for per-app language ("" = follow system). */
+    val appLanguage: String = "",
+    val welcomeSeen: Boolean = false,
     val experimentalEnabled: Boolean = false,
     /** Floating pill navigation instead of the bottom bar (needs master switch). */
     val floatingNavBar: Boolean = false,

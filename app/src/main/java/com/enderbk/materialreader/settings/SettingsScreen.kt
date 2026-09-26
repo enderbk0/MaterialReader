@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.WindowInsets
@@ -19,22 +20,34 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import com.enderbk.materialreader.ui.BleedTopBar
+import com.enderbk.materialreader.ui.BottomBleedOverlay
 import com.enderbk.materialreader.ui.TopBleedOverlay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.enderbk.materialreader.R
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.enderbk.materialreader.BuildConfig
 import com.enderbk.materialreader.data.PageLayout
@@ -42,6 +55,7 @@ import com.enderbk.materialreader.data.ReaderBackground
 import com.enderbk.materialreader.data.SettingsStore
 import com.enderbk.materialreader.data.ThemeMode
 import com.enderbk.materialreader.data.ZoomMode
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -49,10 +63,15 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onAboutClick: () -> Unit,
     showBack: Boolean,
+    darkThemeActive: Boolean,
     modifier: Modifier = Modifier
 ) {
     val vm: SettingsViewModel = viewModel(factory = settingsViewModelFactory(settings))
     val state by vm.uiState.collectAsState()
+    var languageDialogOpen by remember { mutableStateOf(false) }
+    val languageScope = rememberCoroutineScope()
+    var pendingRestartLanguage by remember { mutableStateOf<String?>(null) }
+    val activity = LocalContext.current as android.app.Activity
 
     Scaffold(
         modifier = modifier,
@@ -60,11 +79,11 @@ fun SettingsScreen(
             .exclude(WindowInsets.navigationBars),
         topBar = {
             BleedTopBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = if (showBack) {
                     {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                         }
                     }
                 } else {
@@ -87,26 +106,26 @@ fun SettingsScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            item { SectionHeader("Appearance") }
+            item { SectionHeader(stringResource(R.string.settings_appearance)) }
             item {
                 PreferenceGroup {
                     SegmentedPreferenceRow(
-                        title = "Theme",
+                        title = stringResource(R.string.settings_theme),
                         options = listOf(
-                            ThemeMode.SYSTEM to "System",
-                            ThemeMode.LIGHT to "Light",
-                            ThemeMode.DARK to "Dark"
+                            ThemeMode.SYSTEM to stringResource(R.string.settings_theme_system),
+                            ThemeMode.LIGHT to stringResource(R.string.settings_theme_light),
+                            ThemeMode.DARK to stringResource(R.string.settings_theme_dark)
                         ),
                         selected = state.themeMode,
                         onSelect = vm::setThemeMode,
                         position = RowPosition.TOP
                     )
                     SwitchPreferenceRow(
-                        title = "Dynamic color",
+                        title = stringResource(R.string.settings_dynamic_color),
                         subtitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            "Match your wallpaper on Android 12+"
+                            stringResource(R.string.settings_dynamic_on)
                         } else {
-                            "Requires Android 12 or newer"
+                            stringResource(R.string.settings_dynamic_needs_12)
                         },
                         checked = state.dynamicColor,
                         onCheckedChange = vm::setDynamicColor,
@@ -114,59 +133,77 @@ fun SettingsScreen(
                         enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                     )
                     SegmentedPreferenceRow(
-                        title = "Reader background",
+                        title = stringResource(R.string.settings_background),
                         options = listOf(
-                            ReaderBackground.DEFAULT to "Default",
-                            ReaderBackground.DIM to "Dim"
+                            ReaderBackground.DEFAULT to stringResource(R.string.settings_background_default),
+                            ReaderBackground.DIM to stringResource(R.string.settings_background_dim)
                         ),
                         selected = state.readerBackground,
                         onSelect = vm::setReaderBackground,
-                        position = RowPosition.BOTTOM
+                        position = RowPosition.MIDDLE
+                    )
+                    SwitchPreferenceRow(
+                        title = stringResource(R.string.settings_rounded_font),
+                        subtitle = stringResource(R.string.settings_rounded_font_sub),
+                        checked = state.roundedFont,
+                        onCheckedChange = vm::setRoundedFont,
+                        position = RowPosition.MIDDLE
+                    )
+                    NavigationPreferenceRow(
+                        title = stringResource(R.string.settings_language),
+                        subtitle = appLanguageName(state.appLanguage),
+                        position = RowPosition.BOTTOM,
+                        onClick = { languageDialogOpen = true }
                     )
                 }
             }
 
-            item { SectionHeader("Reading") }
+            item { SectionHeader(stringResource(R.string.settings_reading)) }
             item {
                 PreferenceGroup {
                     SegmentedPreferenceRow(
-                        title = "Default zoom",
+                        title = stringResource(R.string.settings_zoom),
                         options = listOf(
-                            ZoomMode.FIT_WIDTH to "Width",
-                            ZoomMode.FIT_PAGE to "Page",
-                            ZoomMode.ACTUAL_SIZE to "Actual"
+                            ZoomMode.FIT_WIDTH to stringResource(R.string.settings_zoom_width),
+                            ZoomMode.FIT_PAGE to stringResource(R.string.settings_zoom_page),
+                            ZoomMode.ACTUAL_SIZE to stringResource(R.string.settings_zoom_actual)
                         ),
                         selected = state.defaultZoomMode,
                         onSelect = vm::setZoomMode,
                         position = RowPosition.TOP
                     )
                     SegmentedPreferenceRow(
-                        title = "Page layout",
+                        title = stringResource(R.string.settings_layout),
                         options = listOf(
-                            PageLayout.CONTINUOUS to "Continuous",
-                            PageLayout.SINGLE_PAGE to "Single"
+                            PageLayout.CONTINUOUS to stringResource(R.string.settings_layout_continuous),
+                            PageLayout.SINGLE_PAGE to stringResource(R.string.settings_layout_single)
                         ),
                         selected = state.pageLayout,
                         onSelect = vm::setPageLayout,
                         position = RowPosition.MIDDLE
                     )
                     SwitchPreferenceRow(
-                        title = "Night mode",
-                        subtitle = "Invert page colors for reading in the dark (colored figures keep their hues)",
-                        checked = state.nightMode,
+                        title = stringResource(R.string.settings_night),
+                        subtitle = if (darkThemeActive) {
+                            stringResource(R.string.settings_night_sub)
+                        } else {
+                            stringResource(R.string.settings_night_unavailable)
+                        },
+                        checked = state.nightMode && darkThemeActive,
                         onCheckedChange = vm::setNightMode,
-                        position = RowPosition.MIDDLE
+                        position = RowPosition.MIDDLE,
+                        enabled = darkThemeActive
                     )
                     SwitchPreferenceRow(
-                        title = "Keep screen awake while reading",
-                        subtitle = "Prevent the display from sleeping in the reader",
+                        title = stringResource(R.string.settings_keep_awake),
+                        subtitle = stringResource(R.string.settings_keep_awake_sub),
                         checked = state.keepScreenAwake,
                         onCheckedChange = vm::setKeepAwake,
                         position = RowPosition.MIDDLE
                     )
                     SwitchPreferenceRow(
-                        title = "Remember reading position",
-                        subtitle = "Reopen documents where you left off (stored only on this device)",
+                        title = stringResource(R.string.settings_remember),
+                        subtitle = stringResource(R.string.settings_remember_sub),
                         checked = state.rememberReadingPosition,
                         onCheckedChange = vm::setRememberPosition,
                         position = RowPosition.BOTTOM
@@ -174,7 +211,7 @@ fun SettingsScreen(
                 }
             }
 
-            item { SectionHeader("Privacy") }
+            item { SectionHeader(stringResource(R.string.settings_privacy)) }
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -184,20 +221,20 @@ fun SettingsScreen(
                     )
                 ) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PrivacyLine("Your PDFs stay on this device.")
-                        PrivacyLine("No accounts, no cloud, no sync.")
-                        PrivacyLine("No analytics, ads, or tracking.")
-                        PrivacyLine("No internet permission — the app cannot send anything anywhere.")
+                        PrivacyLine(stringResource(R.string.settings_privacy_1))
+                        PrivacyLine(stringResource(R.string.settings_privacy_2))
+                        PrivacyLine(stringResource(R.string.settings_privacy_3))
+                        PrivacyLine(stringResource(R.string.settings_privacy_4))
                     }
                 }
             }
 
-            item { SectionHeader("About") }
+            item { SectionHeader(stringResource(R.string.settings_about)) }
             item {
                 PreferenceGroup {
                     NavigationPreferenceRow(
-                        title = "About MaterialReader",
-                        subtitle = "Version ${BuildConfig.VERSION_NAME}",
+                        title = stringResource(R.string.settings_about_row),
+                        subtitle = stringResource(R.string.settings_about_version, BuildConfig.VERSION_NAME),
                         position = RowPosition.ALONE,
                         onClick = onAboutClick
                     )
@@ -205,7 +242,43 @@ fun SettingsScreen(
             }
         }
             TopBleedOverlay()
+            BottomBleedOverlay(modifier = Modifier.align(Alignment.BottomCenter))
+        }
     }
+    pendingRestartLanguage?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { pendingRestartLanguage = null },
+            title = { Text(stringResource(R.string.settings_language_restart_title)) },
+            text = { Text(stringResource(R.string.settings_language_restart_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        com.enderbk.materialreader.util.applyAppLanguage(activity, pending)
+                        pendingRestartLanguage = null
+                        com.enderbk.materialreader.util.restartApp(activity)
+                    }
+                ) { Text(stringResource(R.string.settings_language_restart_now)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRestartLanguage = null }) {
+                    Text(stringResource(R.string.settings_language_restart_later))
+                }
+            }
+        )
+    }
+    if (languageDialogOpen) {
+        LanguageDialog(
+            current = state.appLanguage,
+            onDismiss = { languageDialogOpen = false },
+            onSelect = { tag ->
+                // Persist first; the restart dialog applies afterwards so the
+                // relaunched app deterministically reads the new value back.
+                languageScope.launch {
+                    vm.setAppLanguageSync(tag)
+                    pendingRestartLanguage = tag
+                }
+            }
+        )
     }
 }
 
@@ -230,4 +303,75 @@ private fun PrivacyLine(text: String) {
         Spacer(Modifier.width(8.dp))
         Text(text, style = MaterialTheme.typography.bodyMedium)
     }
+}
+
+/** Native language names (never translated). Empty tag = follow system. */
+private val AppLanguageChoices = listOf("en" to "English", "vi" to "Tiếng Việt")
+
+@Composable
+private fun appLanguageName(tag: String): String =
+    if (tag.isBlank()) {
+        stringResource(R.string.settings_language_system)
+    } else {
+        // Unknown/stale tags (e.g. removed languages) fall back to system.
+        AppLanguageChoices.firstOrNull { it.first == tag }?.second
+            ?: stringResource(R.string.settings_language_system)
+    }
+
+@Composable
+private fun LanguageDialog(
+    current: String,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_language)) },
+        text = {
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = {
+                            onSelect("")
+                            onDismiss()
+                        }, role = Role.Button)
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(selected = current.isBlank(), onClick = {
+                        onSelect("")
+                        onDismiss()
+                    })
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        stringResource(R.string.settings_language_system),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                AppLanguageChoices.forEach { (tag, name) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = {
+                                onSelect(tag)
+                                onDismiss()
+                            }, role = Role.Button)
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = current == tag, onClick = {
+                            onSelect(tag)
+                            onDismiss()
+                        })
+                        Spacer(Modifier.width(4.dp))
+                        Text(name, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
+        }
+    )
 }

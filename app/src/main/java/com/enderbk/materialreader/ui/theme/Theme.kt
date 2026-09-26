@@ -27,6 +27,7 @@ private val LightColorScheme = lightColorScheme(
 fun MaterialReaderTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     dynamicColor: Boolean = true,
+    roundedFont: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -47,7 +48,7 @@ fun MaterialReaderTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = if (roundedFont) RoundedTypography else Typography,
         content = content
     )
 }

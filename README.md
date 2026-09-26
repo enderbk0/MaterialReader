@@ -1,171 +1,152 @@
 # MaterialReader
 
-**Open a PDF. Read it. That's it.**
+![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
+![Release](https://img.shields.io/github/v/release/enderbk0/MaterialReader)
+![Platform](https://img.shields.io/badge/platform-Android%2024%2B-3DDC84?logo=android)
+![Kotlin](https://img.shields.io/badge/Kotlin-2.3-purple?logo=kotlin)
+![Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202026.09-4285F4?logo=jetpackcompose)
+![Ads](https://img.shields.io/badge/ads-none-green)
+![Tracking](https://img.shields.io/badge/tracking-none-green)
+![Accounts](https://img.shields.io/badge/accounts-none-green)
 
-MaterialReader is a free, open-source, privacy-first PDF reader for Android.
-No accounts. No subscriptions. No ads. No analytics. No cloud. No internet
-permission. Reading a PDF never requires paying money, creating an account,
-watching an advertisement, or uploading the document — that is an
-architectural guarantee, not a marketing claim.
+> **Open a PDF. Read it. That's it.**
 
-- License: [Apache-2.0](LICENSE)
-- Privacy design: everything stays on-device; see [Privacy](#privacy) below
-- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Security: [SECURITY.md](SECURITY.md)
-- Dependency licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+MaterialReader is a free and open-source PDF reader for Android. No accounts.
+No subscriptions. No ads. No analytics. No cloud. Reading a PDF never
+requires paying money, creating an account, watching an advertisement, or
+uploading the document — that is an architectural guarantee, not a slogan.
+
+## Contents
+
+- [Features](#features)
+- [Download](#download)
+- [Privacy](#privacy)
+- [Permissions](#permissions)
+- [PDF compatibility](#pdf-compatibility)
+- [Rendering architecture](#rendering-architecture)
+- [Tech stack](#tech-stack)
+- [Project structure](#project-structure)
+- [Languages](#languages)
+- [Build and verify](#build-and-verify)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Features
 
 **Library**
 
-- Recent + pinned/favorite PDFs, search by filename, sort by recent/name/size
-- Folders: group PDFs, filter by folder, relink missing files from the library
-- Prominent "Open PDF" action using the Android system document picker
-  (Storage Access Framework — no broad filesystem access requested)
-- Persistable URI grants, so documents stay in the library across restarts
-- Useful empty state; the app never nags, never shows ads, never asks to rate
+- Recent and pinned/favorite PDFs, filename search, sorting, and folders
+- System document picker (Storage Access Framework) — no broad file access
+- Persisted access so documents stay in the library across restarts
+- Missing files are flagged with one-tap relink or remove
+- Opens PDFs from file managers (`VIEW`) and share sheets (`SEND`)
 
 **Reader**
 
-- Real rendering via the platform `PdfRenderer` (text, scanned/image PDFs,
-  embedded fonts, transparency, mixed page sizes/orientations, annotations
-  where the engine supports them)
-- Lazy, on-demand page rendering with a bounded LRU bitmap cache — large
-  documents do not load fully into memory
-- Continuous scroll and single-page layouts
-- Current page indicator, page count, reading progress, jump-to-page dialog
-- Pinch-to-zoom, double-tap zoom, zoom in/out, fit-to-width, fit-to-page,
-  actual (physical) size
-- Night mode: inverts page colors for reading in the dark (dark text becomes
-  light); a hue-restoring filter keeps colored figures recognizable, though
-  photos/diagrams are still recolored — toggle in the reader menu or Settings
-- In-document text search (offline, via the bundled PdfBox text layer)
-- Reader menu extras: print, share the PDF, details, and a minimal
-  quick-settings sheet (theme, night mode, keep-awake)
-- Per-page text sheet: selectable text, copy, share, and tappable
-  http(s) link annotations (opened in the user's browser on explicit tap)
-- Optional "remember reading position" (on-device only)
-- Print, share the PDF file, and a details sheet from the reader menu
-- Experimental corner (unlock by tapping the version in About 5 times):
-  floating pill navigation and other trials
-- Optional "keep screen awake while reading"
-- Follows device rotation automatically; light/dark/dynamic-color aware
-- Opens PDFs from the picker, from file managers (`VIEW`), and from share
-  sheets (`SEND`)
+- Real rendering with lazy, on-demand pages and a bounded bitmap cache
+- Continuous scroll and single-page layouts, reading progress, jump-to-page
+- Pinch-to-zoom anchored at the fingers, double-tap zoom, zoom controls,
+  fit-to-width, fit-to-page, actual size, free 2D panning while zoomed
+- Offline in-document search, copyable page text, share, tappable links
+- Night mode with picture preservation, print, share-the-file, details sheet
+- Optional reading-position memory and keep-awake
 
 **Settings**
 
-- Appearance: system/light/dark theme, dynamic color (Android 12+),
-  reader background (default/paper/dim)
-- Reading: default zoom, page layout, keep-awake, remember position
-- Privacy: plain-language statement of what the app does *not* do
-- About: version, Apache-2.0 license, source repository, dependency licenses
+- System/light/dark theme, dynamic color, rounded interface font
+- Default zoom, page layout, reader background, per-app language
+- Plain-language privacy statement and a full offline About screen
+
+## Download
+
+- **Stable APK:** get the latest signed release from the
+  [Releases page](https://github.com/enderbk0/MaterialReader/releases).
+- **Build it yourself:** see [Build and verify](#build-and-verify) — one
+  command, no accounts or keys required for debug builds.
+
+Note: release builds are signed with the maintainer key. If you previously
+installed a debug build, uninstall it first — Android treats different
+signatures as different apps.
 
 ## Privacy
 
-MaterialReader is privacy-first **by architecture**:
+Privacy-first by architecture:
 
-- Declares **zero permissions** — notably, there is **no `INTERNET`
-  permission**, so the app *cannot* transmit anything, even if it wanted to.
-- No analytics, advertising, telemetry, crash-upload, tracking IDs, accounts,
-  cloud sync, or background network calls.
-- PDFs are read in place through `ContentResolver`; contents are never copied
-  to app storage, never uploaded, never shared with third parties.
-- Library metadata (filenames, positions), bookmarks, and settings live in
-  app-private `DataStore` files on the device (included in the user's own
-  Auto Backup; never sent to us — there is no "us" server).
-- Opening a link annotation fires a normal `ACTION_VIEW` intent: the *user's
-  browser* opens it, only after an explicit tap.
+- **Zero permissions declared** — notably no `INTERNET`, so the app cannot
+  transmit anything even if it tried:
 
-Verify it yourself: `grep -r INTERNET app/src/main/AndroidManifest.xml`
-returns nothing, and the dependency list contains no proprietary SDKs.
+  ```bash
+  grep -r INTERNET app/src/main/AndroidManifest.xml # returns nothing
+  ```
 
-## PDF compatibility — honest limits
+- No analytics, advertising, telemetry, crash upload, tracking IDs,
+  accounts, cloud sync, or background network calls.
+- PDFs are read in place through the `ContentResolver`; contents are never
+  copied to app storage, uploaded, or shared with third parties.
+- Library metadata and settings live in app-private on-device storage only.
+- Link annotations open in the user's browser on explicit tap only.
 
-"All PDFs readable" is a compatibility *goal*. What works and what does not:
+## Permissions
 
-| Works | Notes |
+None. The manifest intentionally declares no `<uses-permission>`.
+
+## PDF compatibility
+
+"All PDFs readable" is treated as a compatibility goal. Current status:
+
+| Status | Coverage |
 |---|---|
-| Text PDFs, scanned/image PDFs, multi-page & large documents, embedded fonts, images, transparency, mixed sizes/orientations | Rendered by the platform engine |
-| In-document search, copyable page text, external links | Offline text layer (PdfBox-Android) |
-| Encrypted/password-protected PDFs | ❌ Clear error message; not supported yet |
-| Interactive forms, JavaScript, video/audio, 3D | ❌ Rendered statically or not at all; engine limitation |
-| In-place text selection *on the rendered bitmap* | ⚠️ By design: selection happens in the page-text sheet (selectable text + copy/share), because `PdfRenderer` exposes no text runs. Scanned pages show an honest "no extractable text" note |
-| Very large search indexes | Search caps at 2,000 pages / 300 hits to bound time and memory |
+| Supported | Text PDFs, scanned/image PDFs, multi-page and large documents, embedded fonts, images, transparency, mixed page sizes and orientations, links, annotations where the engine supports them, offline search and text extraction |
+| Supported with adaptation | Night mode on photo pages (dimmed originals), scanned pages (dimmed), vector charts (dimmed to preserve hues), dark-background PDFs (dimmed instead of inverted) |
+| Not supported | Password-protected PDFs (clear error message), interactive forms, JavaScript, embedded audio/video/3D |
 
-## Rendering architecture (and why not AndroidX PDF)
+Limitations are documented here rather than hidden. See
+[Rendering architecture](#rendering-architecture) for how night mode
+classifies pages.
 
-Zoom had no visible effect in early builds; the investigation found the bug
-in our own gesture/state layer, not the renderer — so no new engine was
-needed, only correct plumbing:
+## Rendering architecture
+
+An earlier zoom regression was traced to our own gesture/state layer, not
+the renderer — so the engine stayed, and only the plumbing was fixed:
 
 - **One `PdfSession` per open document.** The platform `PdfRenderer` handle
   is created once at open and closed on exit — never per zoom update.
+- **White paper guarantee.** `PdfRenderer` composites over the bitmap
+  without clearing it, and transparent-background PDFs are common: every
+  destination bitmap is pre-filled white, as mainstream readers do.
 - **Pinch accumulates per gesture** against the scale at gesture start, then
-  passes through a 0.5% throttle. (Previously, sub-threshold frames were
-  dropped *with their motion lost forever*, freezing slow pinches.)
-- **Finger-anchored pinch** (continuous mode): the scroll offset is
-  compensated around the fingers' centroid on every scale change, so content
-  stays put; single-page mode is center-anchored.
-- **No per-frame re-rendering:** Compose requests settled `(index, width)`
-  pairs only (120ms settle debounce, 160px width buckets, 2048px cap, OOM
-  retry at half width). Bitmaps live in a bounded LRU shared by all pages;
-  recomposition carries state, never pixels.
-- **Free 2D pan** while zoomed (list scroll locks); snap-back on zoom out.
+  passes a small throttle; scale changes are compensated around the fingers'
+  position, so content stays put.
+- **No per-frame re-rendering:** settled page/width pairs only, with
+  debouncing, width bucketing, resolution caps, OOM retry, and a shared LRU.
+  Recomposition carries state, never pixels.
 
-We evaluated migrating the viewer to the official AndroidX PDF libraries
-(`androidx.pdf:pdf-viewer` / `pdf-compose` 1.0.0-beta01) and rejected it on
-evidence:
+The official AndroidX PDF libraries (`androidx.pdf`, 1.0.0-beta01) were
+evaluated and rejected on evidence: pre-release stability, minSdk 28
+(vs 24 here), a transitive proprietary Play Services ML Kit dependency, and
+an isolated-process service that custom compositing could not run inside.
+PdfBox-Android remains only for offline text extraction, link annotations,
+and per-page image-region analysis for night mode.
 
-1. Both are **beta**, not stable.
-2. They require **minSdk 28** (we support 24+; platform `PdfRenderer` works).
-3. They transitively pull in **`play-services-mlkit-text-recognition`**
-   (proprietary Google Play Services) via `pdf-ocr-play-services` —
-   incompatible with our FOSS, no-proprietary-SDK requirements.
-4. Rendering runs in an isolated-process document service, which our custom
-   night-mode compositing could not run inside.
-
-PdfBox-Android remains **only** for what the platform engine cannot do:
-offline text extraction (search, page text), link annotations, and
-per-page image-region analysis for night mode.
-
-PDF appearance (Normal / Night) is fully decoupled from the Material theme
-(Light / Dark / System) by a single tested function: night mode always
-renders the night path with a dark background in *any* theme, and flipping
-the theme never alters page rendering — only the surrounding surfaces.
-
-Night classification uses combined signals (coverage, bleed, draw order
-vs. text, curves/shading, filled-area share, OCR presence): text PDFs invert
-to true black; every image page inverts first (so dark text always becomes
-light) and then paints its picture regions back as dimmed originals — photos
-and full-page scans (± OCR, rotated) keep their hues while going dark;
-vector-heavy charts and full-bleed posters dim so artwork and headlines stay
-legible. Table rules and underlines never count as artwork.
-
-Night mode never inverts pictures: image placements are extracted from each
-page's content stream, the page is inverted on the CPU, and the original
-picture regions are composited back. Fully scanned pages fall back to a dim
-that preserves hues. Vector diagrams still invert (documented limitation).
+Night classification combines coverage, bleed, draw order vs. text,
+curves/shading activity, filled-area share, and OCR presence: text PDFs
+invert to true black, embedded photos are composited back as dimmed
+originals, full-page scans darken readably with or without OCR layers, and
+vector-heavy pages dim so chart hues survive. PDF appearance (Normal /
+Night) is fully decoupled from the Material theme and covered by tests.
 
 ## Tech stack
 
 - Kotlin, Jetpack Compose, Material 3 (dynamic color, edge-to-edge,
   adaptive bottom-bar/rail navigation), Navigation Compose
-- AndroidX (activity, lifecycle, datastore-preferences), coroutines,
-  kotlinx.serialization, Gradle Kotlin DSL
+- AndroidX (activity, lifecycle, appcompat, datastore-preferences),
+  coroutines, kotlinx.serialization, Gradle Kotlin DSL
 - Rendering: `android.graphics.pdf.PdfRenderer` (platform, no extra SDK)
-- Text layer: PdfBox-Android 2.0.27.0 (Apache-2.0) + Bouncy Castle
-- Architecture: unidirectional data flow, ViewModels, `DocumentStore` /
-  `SettingsStore` / `ReaderBackend` interfaces with DataStore-backed and
-  in-memory implementations (the latter power previews and JVM tests)
-- Settings row design (grouped `surfaceContainer` rows, whole-row toggle
-  targets, press-morphing corners) inspired by
-  [ReFra](https://github.com/IacobIonut01/ReFra) (Apache-2.0); segmented
-  controls follow the official M3 segmented-button guidance
+- Text layer: PdfBox-Android 2.0.27.0 (Apache-2.0)
 - Dependency versions follow the official AndroidX release notes
-  (Compose BOM 2026.09.00, Navigation 2.10.2, DataStore 1.2.1, …)
+  (Compose BOM 2026.09.00, Navigation 2.10.2, DataStore 1.2.1)
 
-Project layout:
+## Project structure
 
 ```
 app/src/main/java/com/enderbk/materialreader/
@@ -175,26 +156,53 @@ app/src/main/java/com/enderbk/materialreader/
   data/  domain/  pdf/  util/
 ```
 
-## Build & verify
+UI state lives in ViewModels with unidirectional data flow; platform I/O
+sits behind `DocumentStore`, `SettingsStore`, `ReaderBackend`, and
+`DocumentMetaSource` interfaces with DataStore-backed and in-memory
+implementations (the latter power previews and JVM tests).
 
-Requirements: JDK 17+, Android SDK with `platforms;android-37` and
-`build-tools;36.0.0` (see `local.properties` for `sdk.dir`).
+## Languages
+
+The UI is fully localizable through `res/values/strings.xml`, with
+Vietnamese in `res/values-vi/`. The in-app selector (Settings → Language)
+uses the official per-app language APIs (`localeConfig` plus the AppCompat
+backport) with an explicit restart step, and system Settings changes are
+detected and followed automatically. To add a language, copy
+`values/strings.xml` into `values-<code>/`, translate it, and register the
+code in `res/xml/locales_config.xml` — no code changes needed.
+
+An opt-in rounded interface font (Nunito, OFL) ships in `res/font/` and is
+toggled in Settings → Appearance. PDF content always renders with its own
+embedded fonts.
+
+## Build and verify
+
+Requirements: JDK 17+, Android SDK with `platforms;android-37`
+(see `local.properties` for `sdk.dir`).
 
 ```bash
-./gradlew :app:assembleDebug      # build
+./gradlew :app:assembleDebug      # debug APK
+./gradlew :app:assembleRelease    # signed release APK (needs keystore, below)
 ./gradlew :app:testDebugUnitTest  # JVM unit tests
 ./gradlew :app:connectedDebugAndroidTest  # on-device UI tests
 ```
 
-Manual checklist (also see CONTRIBUTING.md): open a real multi-hundred-page
-PDF, scroll, rotate, toggle themes, revoke a URI grant, enable airplane mode
-— everything must keep working offline.
+Release signing is intentionally not committed: copy
+`keystore.properties.example` to `keystore.properties`, point it at your
+own keystore, and keep both out of version control. Debug builds need no
+keys at all.
 
-## Permissions
+Manual checklist: open a large real PDF, scroll, rotate, toggle themes,
+revoke a document grant, and run the whole app in airplane mode.
 
-None. The manifest intentionally declares no `<uses-permission>`.
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports that include the app
+version (Settings → About), the document type, and the Details → Appearance
+line get fixed fastest. Security issues: see [SECURITY.md](SECURITY.md).
 
 ## License
 
-Copyright 2026 MaterialReader Contributors.
+Copyright (C) 2026 EnderBK.
 Licensed under the [Apache License, Version 2.0](LICENSE).
+Dependency licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

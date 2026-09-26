@@ -61,3 +61,26 @@ fun TopBleedOverlay(
             )
     )
 }
+
+/**
+ * Mirror of [TopBleedOverlay] for the bottom edge: fades from transparent
+ * into the navigation bar color, drawn over the content end and sitting
+ * below the in-app navigation bar. Never consumes touch.
+ */
+@Composable
+fun BottomBleedOverlay(
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    height: Dp = 64.dp,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.Transparent, containerColor)
+                )
+            )
+    )
+}

@@ -20,6 +20,7 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
 
 private val DocumentsJson = stringPreferencesKey("documents_json_v1")
 private val CustomFolders = stringSetPreferencesKey("custom_folders_v1")
+private val AppLanguage = stringPreferencesKey("app_language")
 
 private val json = Json { ignoreUnknownKeys = true }
 
@@ -110,6 +111,8 @@ private object ThemeKeys {
     val rememberPosition = booleanPreferencesKey("remember_reading_position")
     val readerBackground = stringPreferencesKey("reader_background")
     val nightMode = booleanPreferencesKey("night_mode")
+    val roundedFont = booleanPreferencesKey("rounded_font")
+    val welcomeSeen = booleanPreferencesKey("welcome_seen")
     val experimentalEnabled = booleanPreferencesKey("experimental_enabled")
     val floatingNavBar = booleanPreferencesKey("floating_nav_bar")
     val sortOrder = stringPreferencesKey("sort_order")
@@ -135,6 +138,9 @@ class DataStoreSettingsStore(private val context: Context) : SettingsStore {
                     readerBackground = prefs[ThemeKeys.readerBackground]?.let { runCatching { ReaderBackground.valueOf(it) }.getOrNull() }
                         ?: AppSettings().readerBackground,
                     nightMode = prefs[ThemeKeys.nightMode] ?: false,
+                    roundedFont = prefs[ThemeKeys.roundedFont] ?: false,
+                    appLanguage = prefs[AppLanguage] ?: "",
+                    welcomeSeen = prefs[ThemeKeys.welcomeSeen] ?: false,
                     experimentalEnabled = prefs[ThemeKeys.experimentalEnabled] ?: false,
                     floatingNavBar = prefs[ThemeKeys.floatingNavBar] ?: false,
                     sortOrder = prefs[ThemeKeys.sortOrder]?.let { runCatching { SortOrder.valueOf(it) }.getOrNull() }
@@ -154,6 +160,9 @@ class DataStoreSettingsStore(private val context: Context) : SettingsStore {
             prefs[ThemeKeys.rememberPosition] = next.rememberReadingPosition
             prefs[ThemeKeys.readerBackground] = next.readerBackground.name
             prefs[ThemeKeys.nightMode] = next.nightMode
+            prefs[ThemeKeys.roundedFont] = next.roundedFont
+            prefs[AppLanguage] = next.appLanguage
+            prefs[ThemeKeys.welcomeSeen] = next.welcomeSeen
             prefs[ThemeKeys.experimentalEnabled] = next.experimentalEnabled
             prefs[ThemeKeys.floatingNavBar] = next.floatingNavBar
             prefs[ThemeKeys.sortOrder] = next.sortOrder.name

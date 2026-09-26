@@ -83,9 +83,22 @@ class SettingsStoreTest {
         assertTrue(settings.rememberReadingPosition)
         assertEquals(ReaderBackground.DEFAULT, settings.readerBackground)
         assertFalse(settings.nightMode)
+        assertFalse(settings.roundedFont)
+        assertEquals("", settings.appLanguage)
+        assertFalse(settings.welcomeSeen)
         assertFalse(settings.experimentalEnabled)
         assertFalse(settings.floatingNavBar)
         assertEquals(SortOrder.RECENT, settings.sortOrder)
+    }
+
+    @Test
+    fun appearanceFlagsRoundTrip() = runTest {
+        val store = InMemorySettingsStore()
+        store.update { it.copy(roundedFont = true, appLanguage = "vi", welcomeSeen = true) }
+        val settings = store.settings.first()
+        assertTrue(settings.roundedFont)
+        assertEquals("vi", settings.appLanguage)
+        assertTrue(settings.welcomeSeen)
     }
 
     @Test
@@ -107,5 +120,20 @@ class SettingsStoreTest {
         assertTrue(settings.keepScreenAwake)
         // Untouched values keep defaults.
         assertTrue(settings.rememberReadingPosition)
+    }
+
+    @Test
+    fun followSystemLocaleOnlyOnRealDivergence() {
+        // Forced tag vs a different system language: yield to the system.
+        assertTrue(
+            com.enderbk.materialreader.util.shouldFollowSystemLocale("vi", "en")
+        )
+        // Same language (region variants included): stay put.
+        assertFalse(com.enderbk.materialreader.util.shouldFollowSystemLocale("vi", "vi"))
+        assertFalse(com.enderbk.materialreader.util.shouldFollowSystemLocale("en", "en"))
+        // Following system already: nothing to clear.
+        assertFalse(com.enderbk.materialreader.util.shouldFollowSystemLocale("", "en"))
+        // No system language reported: never touch the override.
+        assertFalse(com.enderbk.materialreader.util.shouldFollowSystemLocale("vi", ""))
     }
 }

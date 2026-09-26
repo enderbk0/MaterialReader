@@ -3,6 +3,7 @@ package com.enderbk.materialreader
 import android.graphics.Bitmap
 import com.enderbk.materialreader.library.DocumentMetaSource
 import com.enderbk.materialreader.pdf.PageLink
+import com.enderbk.materialreader.pdf.NightPageMode
 import com.enderbk.materialreader.pdf.PdfDocument
 import com.enderbk.materialreader.pdf.ReaderBackend
 import com.enderbk.materialreader.pdf.TextHit
@@ -32,6 +33,9 @@ class FakeBackend : ReaderBackend {
         throw UnsupportedOperationException("Not needed for these UI states")
 
     override suspend fun renderNightPage(document: PdfDocument, index: Int, widthPx: Int): Bitmap =
+        throw UnsupportedOperationException("Not needed for these UI states")
+
+    override suspend fun pageMode(document: PdfDocument, index: Int): NightPageMode =
         throw UnsupportedOperationException("Not needed for these UI states")
 
     override suspend fun search(uriString: String, query: String): List<TextHit> = emptyList()

@@ -29,9 +29,11 @@ import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
@@ -40,6 +42,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.enderbk.materialreader.data.DocumentStore
+import kotlinx.coroutines.launch
 import com.enderbk.materialreader.data.SettingsStore
 import com.enderbk.materialreader.data.ThemeMode
 import com.enderbk.materialreader.library.DocumentMetaSource
@@ -51,6 +54,7 @@ import com.enderbk.materialreader.settings.ExperimentalScreen
 import com.enderbk.materialreader.ui.expressiveEffects
 import com.enderbk.materialreader.ui.expressiveSpatial
 import com.enderbk.materialreader.settings.SettingsScreen
+import com.enderbk.materialreader.R
 import com.enderbk.materialreader.ui.theme.MaterialReaderTheme
 
 /**
@@ -77,7 +81,11 @@ fun MaterialReaderApp(
         ThemeMode.DARK -> true
     }
 
-    MaterialReaderTheme(themeMode = themeMode, dynamicColor = dynamicColor) {
+    MaterialReaderTheme(
+        themeMode = themeMode,
+        dynamicColor = dynamicColor,
+        roundedFont = appSettings?.roundedFont == true
+    ) {
         val navController = rememberNavController()
 
         LaunchedEffect(externalUri) {
@@ -89,21 +97,64 @@ fun MaterialReaderApp(
             }
         }
 
-        BoxWithConstraints(Modifier.fillMaxSize()) {
+        val loadedSettings = appSettings
+        if (loadedSettings == null) {
+            // Settings still loading: hold a blank frame rather than
+            // flashing the wrong start destination.
+            Box(Modifier.fillMaxSize())
+        } else {
+            AppNavHost(
+                navController = navController,
+                documents = documents,
+                settings = settings,
+                meta = meta,
+                backend = backend,
+                appSettings = loadedSettings,
+                themeMode = themeMode,
+                darkTheme = darkTheme
+            )
+        }
+    }
+}
+
+/**
+ * Navigation host below the theme shell. Starts on the welcome screen for
+ * first-run users, otherwise straight into the library.
+ */
+@Composable
+private fun AppNavHost(
+    navController: androidx.navigation.NavHostController,
+    documents: DocumentStore,
+    settings: SettingsStore,
+    meta: DocumentMetaSource,
+    backend: ReaderBackend,
+    appSettings: com.enderbk.materialreader.data.AppSettings,
+    themeMode: ThemeMode,
+    darkTheme: Boolean
+) {
+    val scope = rememberCoroutineScope()
+    BoxWithConstraints(Modifier.fillMaxSize()) {
             val useRail = maxWidth >= 840.dp
             val backStack by navController.currentBackStackEntryAsState()
             val currentRoute = backStack?.destination?.route
             val showSuite = currentRoute == Routes.LIBRARY || currentRoute == Routes.SETTINGS
             // The floating pill replaces the standard suite wherever it shows.
-            val floatingOn = (appSettings?.experimentalEnabled == true) &&
-                (appSettings?.floatingNavBar == true)
+            val floatingOn = appSettings.experimentalEnabled && appSettings.floatingNavBar
             // Settings is a tab when reached from the library: no back arrow.
             // Reached from the reader/about, it keeps one.
             val showSettingsBack = navController.previousBackStackEntry
                 ?.destination?.route?.let { it != Routes.LIBRARY && it != Routes.SETTINGS }
                 ?: false
 
-            Box(Modifier.fillMaxSize()) {
+            // Night mode belongs to dark theme: leaving it turns night off
+        // automatically so pages can never get stuck dark in light mode.
+        LaunchedEffect(darkTheme) {
+            if (!darkTheme && appSettings.nightMode) {
+                settings.update { it.copy(nightMode = false) }
+            }
+        }
+
+        Box(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxSize()) {
                 if (showSuite && useRail && !floatingOn) {
                     NavigationRailSuite(
@@ -143,11 +194,27 @@ fun MaterialReaderApp(
                 ) { padding ->
                     NavHost(
                         navController = navController,
-                        startDestination = Routes.LIBRARY,
+                        startDestination = if (appSettings.welcomeSeen) {
+                            Routes.LIBRARY
+                        } else {
+                            Routes.WELCOME
+                        },
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(padding)
                     ) {
+                        composable(Routes.WELCOME) {
+                            WelcomeScreen(
+                                onContinue = {
+                                    scope.launch {
+                                        settings.update { it.copy(welcomeSeen = true) }
+                                    }
+                                    navController.navigate(Routes.LIBRARY) {
+                                        popUpTo(Routes.WELCOME) { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
                         composable(Routes.LIBRARY) {
                             LibraryScreen(
                                 documents = documents,
@@ -171,9 +238,8 @@ fun MaterialReaderApp(
                                 documents = documents,
                                 settings = settings,
                                 backend = backend,
-                                keepScreenAwake = appSettings?.keepScreenAwake ?: false,
-                                readerBackground = appSettings?.readerBackground
-                                    ?: com.enderbk.materialreader.data.ReaderBackground.DEFAULT,
+                                keepScreenAwake = appSettings.keepScreenAwake,
+                                readerBackground = appSettings.readerBackground,
                                 darkTheme = darkTheme,
                                 onBack = { navController.popBackStack() }
                             )
@@ -183,7 +249,8 @@ fun MaterialReaderApp(
                                 settings = settings,
                                 onBack = { navController.popBackStack() },
                                 onAboutClick = { navController.navigate(Routes.ABOUT) },
-                                showBack = showSettingsBack
+                                showBack = showSettingsBack,
+                                darkThemeActive = darkTheme
                             )
                         }
                         composable(Routes.ABOUT) {
@@ -225,7 +292,6 @@ fun MaterialReaderApp(
                 }
             }
         }
-    }
 }
 
 /**
@@ -256,13 +322,13 @@ private fun BottomSuite(
             selected = currentRoute == Routes.LIBRARY,
             onClick = onLibrary,
             icon = { Icon(Icons.Filled.History, contentDescription = null) },
-            label = { Text("Library") }
+            label = { Text(stringResource(R.string.nav_library)) }
         )
         NavigationBarItem(
             selected = currentRoute == Routes.SETTINGS,
             onClick = onSettings,
             icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-            label = { Text("Settings") }
+            label = { Text(stringResource(R.string.nav_settings)) }
         )
     }
 }
@@ -278,13 +344,13 @@ private fun NavigationRailSuite(
             selected = currentRoute == Routes.LIBRARY,
             onClick = onLibrary,
             icon = { Icon(Icons.Filled.History, contentDescription = null) },
-            label = { Text("Library") }
+            label = { Text(stringResource(R.string.nav_library)) }
         )
         NavigationRailItem(
             selected = currentRoute == Routes.SETTINGS,
             onClick = onSettings,
             icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-            label = { Text("Settings") }
+            label = { Text(stringResource(R.string.nav_settings)) }
         )
     }
 }

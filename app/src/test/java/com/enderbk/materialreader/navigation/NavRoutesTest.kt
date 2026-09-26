@@ -19,6 +19,7 @@ class NavRoutesTest {
         assertEquals("settings", Routes.SETTINGS)
         assertEquals("about", Routes.ABOUT)
         assertEquals("experimental", Routes.EXPERIMENTAL)
+        assertEquals("welcome", Routes.WELCOME)
     }
 
     @Test

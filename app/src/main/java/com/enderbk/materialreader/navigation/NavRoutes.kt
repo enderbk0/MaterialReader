@@ -11,6 +11,7 @@ import com.enderbk.materialreader.data.DocumentEntry
  * app works without touching the library first.
  */
 object Routes {
+    const val WELCOME = "welcome"
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
     const val ABOUT = "about"

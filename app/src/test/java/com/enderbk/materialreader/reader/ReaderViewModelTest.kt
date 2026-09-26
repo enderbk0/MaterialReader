@@ -218,6 +218,17 @@ class ReaderViewModelTest {
     }
 
     @Test
+    fun pageNightModeExposesClassification() = runTest(mainRule.dispatcher) {
+        backend.pageModeResult = com.enderbk.materialreader.pdf.NightPageMode.DIM
+        val viewModel = vm()
+        advanceUntilIdle()
+        assertEquals(
+            com.enderbk.materialreader.pdf.NightPageMode.DIM,
+            viewModel.pageNightMode(3)
+        )
+    }
+
+    @Test
     fun nightModeFollowsExternalStoreChanges() = runTest(mainRule.dispatcher) {
         // The quick sheet writes the store directly (no ViewModel call): the
         // live reader must still follow, otherwise toggles appear dead.

@@ -23,7 +23,8 @@ class SettingsScreenTest {
                     settings = InMemorySettingsStore(),
                     onBack = {},
                     onAboutClick = {},
-                    showBack = false
+                    showBack = false,
+                    darkThemeActive = true
                 )
             }
         }
