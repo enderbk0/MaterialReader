@@ -25,8 +25,8 @@ SRC_FG = os.path.join(ROOT, "design", "iconcenter.png")
 RES = os.path.join(ROOT, "app", "src", "main", "res")
 
 LAYER_PX = 432
-# Foreground glyph target width in layer px (~55dp of 108dp viewport).
-GLYPH_TARGET_W = 240
+# Foreground glyph target width in layer px (~50dp of 108dp viewport).
+GLYPH_TARGET_W = 216
 
 DENSITIES = {
     "mdpi": 48,
