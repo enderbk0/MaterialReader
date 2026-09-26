@@ -1,0 +1,1 @@
+Smaller launcher glyph: icon fits better inside OEM masks.
